@@ -10,6 +10,7 @@ from pathlib import Path
 
 from agente import herramientas  # noqa: F401  (registra las herramientas)
 from agente.herramientas.registro import ejecutar, esquemas
+from agente.pendientes import procesar_operacion_pendiente
 from agente.sesion import MODELO, Sesion, crear_cliente_llm
 
 MAX_ITERACIONES = 8
@@ -37,11 +38,18 @@ def responder(sesion: Sesion, historial: list[dict], mensaje: str) -> tuple[str,
     La traza es la lista de herramientas ejecutadas en este turno, con sus argumentos y resultados.
     """
     global _cliente_llm
-    _cliente_llm = _cliente_llm or crear_cliente_llm()
-
     sesion.turnos += 1
+    sesion.mensaje_actual = mensaje
     historial.append({"role": "user", "content": mensaje})
     traza = []
+
+    resultado_pendiente = procesar_operacion_pendiente(sesion, mensaje)
+    if resultado_pendiente is not None:
+        respuesta_pendiente = resultado_pendiente["mensaje"]
+        historial.append({"role": "assistant", "content": respuesta_pendiente})
+        return respuesta_pendiente, traza
+
+    _cliente_llm = _cliente_llm or crear_cliente_llm()
 
     for _ in range(MAX_ITERACIONES):
         instrucciones = _instrucciones()

@@ -1,11 +1,48 @@
 """Cliente autenticado del modelo y estado de la sesión de un cliente de la tienda."""
 import os
 from dataclasses import dataclass
+from typing import Literal, TypeAlias
 
 from openai import OpenAI
 
 # Alias del modelo en el intermediario. No depende del proveedor que haya detrás.
 MODELO = "modelo-clase"
+
+
+@dataclass(frozen=True)
+class ReclamoPendiente:
+    """Datos inmutables que esperan una selección real del cliente."""
+
+    numero_pedido: str
+    producto: str | None
+    motivo: str
+    turno_preparacion: int
+
+
+@dataclass
+class CasoSoporte:
+    """Seguimiento verificable de un problema durante la sesión actual."""
+
+    caso_id: str
+    cliente_id: str
+    numero_pedido: str | None
+    relato_inicial: str
+    intentos_fallidos: int = 0
+    estado: Literal["activo", "resuelto", "escalado"] = "activo"
+    escalamiento_id: str | None = None
+
+
+@dataclass(frozen=True)
+class ResultadoIntentoPendiente:
+    """Solución preparada que espera el resultado real del cliente."""
+
+    caso_id: str
+    intento_id: str
+    descripcion_solucion: str
+    turno_preparacion: int
+
+
+OperacionPendiente: TypeAlias = ReclamoPendiente | ResultadoIntentoPendiente
 
 
 def crear_cliente_llm() -> OpenAI:
@@ -31,3 +68,28 @@ class Sesion:
     turnos: int = 0
     tokens_entrada: int = 0
     tokens_salida: int = 0
+    mensaje_actual: str | None = None
+    caso_soporte: CasoSoporte | None = None
+    operacion_pendiente: OperacionPendiente | None = None
+
+    @property
+    def reclamo_pendiente(self) -> ReclamoPendiente | None:
+        """Vista compatible del reclamo dentro del único estado pendiente."""
+        if isinstance(self.operacion_pendiente, ReclamoPendiente):
+            return self.operacion_pendiente
+        return None
+
+    @reclamo_pendiente.setter
+    def reclamo_pendiente(self, valor: ReclamoPendiente | None) -> None:
+        if valor is None:
+            if isinstance(self.operacion_pendiente, ReclamoPendiente):
+                self.operacion_pendiente = None
+            return
+        self.operacion_pendiente = valor
+
+    @property
+    def resultado_intento_pendiente(self) -> ResultadoIntentoPendiente | None:
+        """Vista del resultado de intento dentro del estado pendiente único."""
+        if isinstance(self.operacion_pendiente, ResultadoIntentoPendiente):
+            return self.operacion_pendiente
+        return None

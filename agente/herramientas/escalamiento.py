@@ -17,6 +17,7 @@ CausalConversacional = Literal[
 ]
 
 MOTIVO_REEMBOLSO_ALTO = "reembolso_superior_300000"
+MOTIVO_TRES_INTENTOS = "tres_intentos_sin_resolver"
 PLAZO_CONTACTO = "máximo un día hábil"
 
 
@@ -52,7 +53,7 @@ def _siguiente_id(escalamientos: list[repositorio.Escalamiento]) -> str:
     return f"E-{numero:03d}"
 
 
-def _validar_cliente_y_pedido(sesion: Sesion, numero_pedido: str | None) -> None:
+def validar_cliente_y_pedido(sesion: Sesion, numero_pedido: str | None) -> None:
     cliente_valido = any(
         cliente.id == sesion.cliente_id for cliente in repositorio.leer_clientes()
     )
@@ -79,7 +80,7 @@ def _registrar_o_reutilizar(
     if not resumen.strip():
         raise ErrorDeHerramienta("El resumen del caso es obligatorio.")
 
-    _validar_cliente_y_pedido(sesion, numero_pedido)
+    validar_cliente_y_pedido(sesion, numero_pedido)
     escalamientos = repositorio.leer_escalamientos()
     resumen_normalizado = _normalizar(resumen)
 
@@ -156,3 +157,44 @@ def escalar_reembolso_superior_al_tope(
         resumen=resumen,
         numero_pedido=numero_pedido,
     )
+
+
+def escalar_por_tres_intentos(sesion: Sesion) -> dict:
+    """Escala el caso activo al comprobar tres fallos guardados por Python.
+
+    No es una herramienta del LLM: no recibe contador, identidad, pedido ni resumen.
+    """
+    caso = sesion.caso_soporte
+    if caso is None:
+        raise ErrorDeHerramienta("No existe un caso de soporte activo.")
+    if caso.cliente_id != sesion.cliente_id:
+        raise ErrorDeHerramienta("El caso de soporte no pertenece a esta sesión.")
+    if caso.intentos_fallidos < 3:
+        raise ErrorDeHerramienta(
+            "El caso todavía no tiene tres intentos fallidos confirmados."
+        )
+    if caso.estado == "resuelto":
+        raise ErrorDeHerramienta("El caso de soporte ya figura como resuelto.")
+
+    validar_cliente_y_pedido(sesion, caso.numero_pedido)
+    if caso.escalamiento_id is not None:
+        caso.estado = "escalado"
+        return {
+            "escalamiento_id": caso.escalamiento_id,
+            "nuevo": False,
+            "plazo_contacto": PLAZO_CONTACTO,
+        }
+
+    resumen = (
+        f"Caso {caso.caso_id}: problema sin resolver después de tres intentos. "
+        f"Relato inicial: {caso.relato_inicial.strip()}"
+    )
+    resultado = _registrar_o_reutilizar(
+        sesion=sesion,
+        motivo=MOTIVO_TRES_INTENTOS,
+        resumen=resumen,
+        numero_pedido=caso.numero_pedido,
+    )
+    caso.escalamiento_id = resultado["escalamiento_id"]
+    caso.estado = "escalado"
+    return resultado
