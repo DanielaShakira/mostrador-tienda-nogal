@@ -15,7 +15,7 @@
       }
     ],
     "estado_final": [
-      {"archivo": "pedidos", "donde": {}, "cantidad": 15},
+      {"archivo": "pedidos", "donde": {}, "cantidad": 17},
       {
         "archivo": "pedidos",
         "donde": {"numero": "P-9999"},

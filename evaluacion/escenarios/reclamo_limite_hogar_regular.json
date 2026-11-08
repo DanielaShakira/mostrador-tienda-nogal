@@ -1,0 +1,36 @@
+{
+  "nombre": "Reclamo en el límite para hogar de cliente regular",
+  "descripcion": "C-01 presenta un reclamo por P-1016 exactamente 15 días después de la entrega. Se verifica que el último día del plazo de hogar sea inclusivo.",
+  "cliente": "C-01",
+  "turnos": [
+    "Quiero registrar un reclamo por el pedido P-1016. El Set de organizadores está defectuoso: una de las piezas llegó rota y no se puede usar."
+  ],
+  "verificaciones": {
+    "herramientas_llamadas": ["registrar_reclamo"],
+    "herramientas_no_llamadas": ["escalar_a_asesor"],
+    "argumentos": [
+      {
+        "herramienta": "registrar_reclamo",
+        "contiene": {
+          "numero_pedido": "P-1016",
+          "tipo_motivo": "defectuoso"
+        }
+      }
+    ],
+    "estado_final": [
+      {"archivo": "pedidos", "donde": {}, "cantidad": 17},
+      {"archivo": "reclamos", "donde": {}, "cantidad": 3},
+      {
+        "archivo": "reclamos",
+        "donde": {"numero_pedido": "P-1016", "estado": "abierto"},
+        "cantidad": 1,
+        "esperado": {
+          "cliente_id": "C-01",
+          "fecha": "2026-11-02"
+        }
+      },
+      {"archivo": "reembolsos", "donde": {}, "cantidad": 0},
+      {"archivo": "escalamientos", "donde": {}, "cantidad": 0}
+    ]
+  }
+}
