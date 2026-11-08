@@ -1,0 +1,7 @@
+[
+  { "id": "C-01", "nombre": "Laura Méndez", "correo": "laura.mendez@correo.co", "categoria": "regular" },
+  { "id": "C-02", "nombre": "Andrés Rojas", "correo": "andres.rojas@correo.co", "categoria": "preferente" },
+  { "id": "C-03", "nombre": "Camila Ortiz", "correo": "camila.ortiz@correo.co", "categoria": "regular" },
+  { "id": "C-04", "nombre": "Jorge Pabón", "correo": "jorge.pabon@correo.co", "categoria": "regular" },
+  { "id": "C-05", "nombre": "Diana Cárdenas", "correo": "diana.cardenas@correo.co", "categoria": "preferente" }
+]

@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mostrador</title>
+  <link rel="stylesheet" href="/estatico/estilos.css">
+</head>
+<body>
+  <header>
+    <strong>Mostrador</strong>
+    <label>Cliente con sesión iniciada:
+      <select id="cliente"></select>
+    </label>
+    <span id="contador"></span>
+    <button id="nueva">Nueva conversación</button>
+    <button id="restablecer">Restablecer datos</button>
+    <button id="exportar">Exportar traza</button>
+  </header>
+  <div id="aviso" hidden></div>
+  <main>
+    <section id="conversacion">
+      <div id="mensajes"></div>
+      <form id="formulario">
+        <input id="texto" autocomplete="off" placeholder="Escribe como si fueras el cliente…">
+        <button>Enviar</button>
+      </form>
+    </section>
+    <section id="traza">
+      <h2>Traza de herramientas</h2>
+      <div id="pasos"><p class="vacio">Aquí aparecerá cada herramienta que use el agente.</p></div>
+    </section>
+  </main>
+  <script src="/estatico/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,18 @@
+{
+  "nombre": "Consulta de plazo para reclamar",
+  "descripcion": "El cliente pregunta por el plazo de reclamo. El agente debe consultar la política, no inventar el plazo.",
+  "cliente": "C-01",
+  "turnos": [
+    "Hola, ¿cuánto tiempo tengo para reclamar si unos audífonos me salen malos?"
+  ],
+  "verificaciones": {
+    "herramientas_llamadas": ["consultar_politica"],
+    "herramientas_no_llamadas": [],
+    "argumentos": [
+      { "herramienta": "consultar_politica", "contiene": { "tema": "reclamos" } }
+    ],
+    "estado_final": [
+      { "archivo": "reclamos", "donde": { "numero_pedido": "P-1002" }, "cantidad": 0 }
+    ]
+  }
+}

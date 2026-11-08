@@ -1,0 +1,18 @@
+[
+  {
+    "id": "R-001",
+    "numero_pedido": "P-1007",
+    "cliente_id": "C-03",
+    "fecha": "2026-10-29",
+    "motivo": "El televisor llegó con la pantalla rota.",
+    "estado": "abierto"
+  },
+  {
+    "id": "R-002",
+    "numero_pedido": "P-1004",
+    "cliente_id": "C-02",
+    "fecha": "2026-10-05",
+    "motivo": "La chaqueta llegó en una talla distinta. Se resolvió con cambio de talla.",
+    "estado": "cerrado"
+  }
+]

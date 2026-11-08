@@ -1,0 +1,17 @@
+{
+  "name": "Mostrador",
+  "image": "mcr.microsoft.com/devcontainers/python:3.2.6-3.14-trixie",
+  "hostRequirements": { "cpus": 2 },
+  "postCreateCommand": "pip install --no-cache-dir -r requirements.txt",
+  "forwardPorts": [8000],
+  "portsAttributes": {
+    "8000": { "label": "Mostrador", "onAutoForward": "openBrowser" }
+  },
+  "customizations": {
+    "vscode": { "extensions": ["ms-python.python"] }
+  },
+  "secrets": {
+    "LLM_API_KEY": { "description": "Credencial de tu grupo para el intermediario. Te la entrega el profesor." },
+    "LLM_BASE_URL": { "description": "Dirección del intermediario, por ejemplo https://clase-agente.danidev.co/v1" }
+  }
+}
