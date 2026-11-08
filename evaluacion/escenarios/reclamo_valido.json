@@ -1,9 +1,10 @@
 {
   "nombre": "Registro de reclamo válido",
-  "descripcion": "C-01 describe claramente un defecto en el producto de P-1002 y solicita registrar el reclamo. Se verifica la llamada y la persistencia de un único reclamo abierto.",
+  "descripcion": "C-01 describe un defecto en P-1002 y después selecciona explícitamente la opción 1 en un turno nuevo. Se verifica la preparación y la persistencia de un único reclamo abierto.",
   "cliente": "C-01",
   "turnos": [
-    "Quiero registrar un reclamo por el pedido P-1002. Los audífonos inalámbricos están defectuosos: el audífono izquierdo no enciende."
+    "Quiero registrar un reclamo por el pedido P-1002. Los audífonos inalámbricos están defectuosos: el audífono izquierdo no enciende.",
+    "1"
   ],
   "verificaciones": {
     "herramientas_llamadas": ["registrar_reclamo"],
@@ -11,10 +12,7 @@
     "argumentos": [
       {
         "herramienta": "registrar_reclamo",
-        "contiene": {
-          "numero_pedido": "P-1002",
-          "tipo_motivo": "defectuoso"
-        }
+        "contiene": {"numero_pedido": "P-1002"}
       }
     ],
     "estado_final": [

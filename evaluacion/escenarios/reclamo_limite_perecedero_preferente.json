@@ -1,9 +1,10 @@
 {
   "nombre": "Reclamo en el límite para perecedero de cliente preferente",
-  "descripcion": "C-05 presenta un reclamo por P-1017 exactamente 18 días después de la entrega. Se verifica que el último día incluya los 15 días adicionales del cliente preferente.",
+  "descripcion": "C-05 prepara un reclamo por P-1017 exactamente 18 días después de la entrega y selecciona la opción 1 en un turno nuevo. Se verifica que el último día incluya los 15 días adicionales del cliente preferente.",
   "cliente": "C-05",
   "turnos": [
-    "Quiero registrar un reclamo por el pedido P-1017. La Canasta de frutas tropicales está defectuosa: las frutas llegaron podridas y no se pueden consumir."
+    "Quiero registrar un reclamo por el pedido P-1017. La Canasta de frutas tropicales está defectuosa: las frutas llegaron podridas y no se pueden consumir.",
+    "1"
   ],
   "verificaciones": {
     "herramientas_llamadas": ["registrar_reclamo"],
@@ -11,10 +12,7 @@
     "argumentos": [
       {
         "herramienta": "registrar_reclamo",
-        "contiene": {
-          "numero_pedido": "P-1017",
-          "tipo_motivo": "defectuoso"
-        }
+        "contiene": {"numero_pedido": "P-1017"}
       }
     ],
     "estado_final": [

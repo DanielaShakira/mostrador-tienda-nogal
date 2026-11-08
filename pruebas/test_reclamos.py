@@ -6,9 +6,44 @@ from datetime import date
 import pytest
 
 from agente import herramientas  # noqa: F401  (registra las herramientas)
+from agente.herramientas.reclamos import procesar_seleccion_reclamo
 from agente.herramientas.registro import ejecutar
 from agente.sesion import Sesion
 from tienda import repositorio
+
+
+SELECCION_POR_TIPO = {
+    "defectuoso": "1",
+    "incompleto": "2",
+    "diferente": "3",
+}
+
+
+def preparar(
+    numero_pedido: str,
+    cliente_id: str,
+    motivo: str | None = "El producto llegó dañado.",
+    producto: str | None = None,
+) -> tuple[dict, Sesion]:
+    sesion = Sesion(
+        cliente_id=cliente_id,
+        turnos=1,
+        mensaje_actual=motivo,
+    )
+    argumentos = {"numero_pedido": numero_pedido}
+    if producto is not None:
+        argumentos["producto"] = producto
+    return ejecutar("registrar_reclamo", json.dumps(argumentos), sesion), sesion
+
+
+def seleccionar(
+    sesion: Sesion,
+    seleccion: str,
+    avanzar_turno: bool = True,
+) -> dict | None:
+    if avanzar_turno:
+        sesion.turnos += 1
+    return procesar_seleccion_reclamo(sesion, seleccion)
 
 
 def registrar(
@@ -18,14 +53,13 @@ def registrar(
     tipo_motivo: str | None = "defectuoso",
     producto: str | None = None,
 ) -> dict:
-    argumentos = {
-        "numero_pedido": numero_pedido,
-        "motivo": motivo,
-        "tipo_motivo": tipo_motivo,
-    }
-    if producto is not None:
-        argumentos["producto"] = producto
-    return ejecutar("registrar_reclamo", json.dumps(argumentos), Sesion(cliente_id=cliente_id))
+    preparado, sesion = preparar(numero_pedido, cliente_id, motivo, producto)
+    if not preparado.get("reclamo_preparado") or tipo_motivo is None:
+        return preparado
+    seleccion = SELECCION_POR_TIPO.get(tipo_motivo, tipo_motivo)
+    sesion.turnos += 1
+    sesion.mensaje_actual = seleccion
+    return procesar_seleccion_reclamo(sesion, seleccion)
 
 
 def cambiar_entrega(numero_pedido: str, fecha_entrega: date) -> None:
@@ -226,17 +260,17 @@ def test_motivo_ausente_o_vacio_pide_aclaracion():
     assert cantidad_reclamos("P-1002") == 0
 
 
-def test_motivo_ambiguo_pide_identificar_una_causa_permitida():
-    resultado = registrar(
+def test_motivo_ambiguo_se_prepara_sin_escribir_y_pide_seleccion():
+    resultado, sesion = preparar(
         "P-1002",
         "C-01",
         motivo="Los audífonos llegaron mal.",
-        tipo_motivo=None,
     )
 
-    assert resultado["requiere_aclaracion"] is True
-    assert resultado["campo"] == "tipo_motivo"
-    assert resultado["opciones"] == ["defectuoso", "incompleto", "diferente"]
+    assert resultado["reclamo_preparado"] is True
+    assert resultado["requiere_seleccion"] is True
+    assert resultado["opciones"]["1"] == "defectuoso"
+    assert sesion.reclamo_pendiente.motivo == "Los audífonos llegaron mal."
     assert cantidad_reclamos("P-1002") == 0
 
 
@@ -257,36 +291,179 @@ def test_tipo_de_motivo_no_permitido_es_argumento_invalido():
     assert cantidad_reclamos("P-1002") == 0
 
 
-def test_diagnostico_tipo_permitido_no_prueba_coherencia_con_el_relato():
-    """Caracteriza una limitación vigente; no afirma que este reclamo sea válido."""
-    motivo_discrepante = "Ya no quiero el producto."
+@pytest.mark.parametrize(
+    "campo_fabricado",
+    [
+        {"tipo_motivo": "defectuoso"},
+        {"confirmado": True},
+        {"confirmacion_cliente": "sí"},
+    ],
+)
+def test_argumentos_fabricados_no_autorizan_reclamo(campo_fabricado: dict):
+    sesion = Sesion(
+        cliente_id="C-01",
+        turnos=1,
+        mensaje_actual="Ya no quiero el producto.",
+    )
+    argumentos = {"numero_pedido": "P-1002", **campo_fabricado}
 
-    resultado = registrar(
+    resultado = ejecutar(
+        "registrar_reclamo",
+        json.dumps(argumentos),
+        sesion,
+    )
+
+    assert resultado["error"] == "Argumentos inválidos."
+    assert sesion.reclamo_pendiente is None
+    assert cantidad_reclamos("P-1002") == 0
+
+
+def test_cambio_de_opinion_no_se_registra_sin_seleccion_real():
+    resultado, sesion = preparar(
         "P-1002",
         "C-01",
-        motivo=motivo_discrepante,
-        tipo_motivo="defectuoso",
+        motivo="Ya no quiero el producto.",
     )
 
-    assert resultado["registrado"] is True
-    guardado = next(
-        reclamo
-        for reclamo in repositorio.leer_reclamos()
-        if reclamo.numero_pedido == "P-1002"
-    )
-    assert guardado.motivo == motivo_discrepante
+    assert resultado["reclamo_preparado"] is True
+    assert resultado["registrado"] is False
+    assert sesion.reclamo_pendiente.motivo == "Ya no quiero el producto."
+    assert cantidad_reclamos("P-1002") == 0
 
 
-@pytest.mark.parametrize("tipo", ["defectuoso", "incompleto", "diferente"])
-def test_acepta_solo_los_tres_tipos_de_motivo_de_la_politica(tipo: str):
-    resultado = registrar(
+@pytest.mark.parametrize(
+    ("seleccion_cliente", "tipo"),
+    [("1", "defectuoso"), ("2", "incompleto"), ("3", "diferente")],
+)
+def test_acepta_las_tres_selecciones_explicitas_de_la_politica(
+    seleccion_cliente: str,
+    tipo: str,
+):
+    preparado, sesion = preparar(
         "P-1002",
         "C-01",
         motivo=f"Descripción del producto {tipo}.",
-        tipo_motivo=tipo,
     )
 
+    resultado = seleccionar(sesion, seleccion_cliente)
+
+    assert preparado["reclamo_preparado"] is True
     assert resultado["registrado"] is True
+    assert resultado["tipo_motivo"] == tipo
+
+
+def test_preparacion_vincula_pedido_producto_y_relato_sin_escribir():
+    motivo = "El audífono izquierdo no enciende."
+
+    resultado, sesion = preparar("P-1002", "C-01", motivo=motivo)
+
+    assert resultado["reclamo_preparado"] is True
+    assert resultado["registrado"] is False
+    assert sesion.reclamo_pendiente.numero_pedido == "P-1002"
+    assert sesion.reclamo_pendiente.producto == "Audífonos inalámbricos"
+    assert sesion.reclamo_pendiente.motivo == motivo
+    assert sesion.reclamo_pendiente.turno_preparacion == 1
+    assert cantidad_reclamos("P-1002") == 0
+
+
+def test_seleccion_invalida_no_escribe_y_descarta_el_pendiente():
+    _, sesion = preparar("P-1002", "C-01")
+
+    resultado = seleccionar(sesion, "4")
+
+    assert resultado["seleccion_invalida"] is True
+    assert resultado["registrado"] is False
+    assert sesion.reclamo_pendiente is None
+    assert cantidad_reclamos("P-1002") == 0
+
+
+def test_cambio_de_pedido_en_turno_de_seleccion_no_escribe():
+    _, sesion = preparar("P-1002", "C-01")
+
+    resultado = seleccionar(sesion, "Ahora quiero reclamar por P-1016")
+
+    assert resultado is None
+    assert sesion.reclamo_pendiente is None
+    assert cantidad_reclamos("P-1002") == 0
+    assert cantidad_reclamos("P-1016") == 0
+
+
+def test_seleccion_sin_pendiente_no_autoriza_ninguna_escritura():
+    sesion = Sesion(cliente_id="C-01", turnos=2, mensaje_actual="1")
+
+    resultado = procesar_seleccion_reclamo(sesion, "1")
+
+    assert resultado is None
+    assert cantidad_reclamos("P-1002") == 0
+
+
+def test_seleccion_en_el_mismo_turno_se_rechaza_sin_consumir_pendiente():
+    _, sesion = preparar("P-1002", "C-01")
+
+    resultado = seleccionar(sesion, "1", avanzar_turno=False)
+
+    assert resultado["seleccion_mismo_turno"] is True
+    assert resultado["registrado"] is False
+    assert sesion.reclamo_pendiente is not None
+    assert cantidad_reclamos("P-1002") == 0
+
+
+def test_autorizacion_consumida_no_se_puede_reutilizar():
+    _, sesion = preparar("P-1002", "C-01")
+
+    primero = seleccionar(sesion, "1")
+    segundo = seleccionar(sesion, "1")
+
+    assert primero["registrado"] is True
+    assert segundo is None
+    assert sesion.reclamo_pendiente is None
+    assert cantidad_reclamos("P-1002", "abierto") == 1
+
+
+def test_llm_no_puede_reemplazar_el_pedido_de_un_pendiente():
+    _, sesion = preparar("P-1002", "C-01")
+    sesion.mensaje_actual = "Intenta usar otro pedido."
+
+    resultado = ejecutar(
+        "registrar_reclamo",
+        json.dumps({"numero_pedido": "P-1016"}),
+        sesion,
+    )
+
+    assert resultado["reclamo_preparado"] is True
+    assert resultado["numero_pedido"] == "P-1002"
+    assert sesion.reclamo_pendiente.numero_pedido == "P-1002"
+    assert cantidad_reclamos("P-1002") == 0
+    assert cantidad_reclamos("P-1016") == 0
+
+
+def test_seleccion_revalida_el_estado_y_consume_el_pendiente():
+    _, sesion = preparar("P-1002", "C-01")
+    pedidos = repositorio.leer_pedidos()
+    pedido = next(item for item in pedidos if item.numero == "P-1002")
+    pedido.estado = "enviado"
+    repositorio.guardar_pedidos(pedidos)
+
+    resultado = seleccionar(sesion, "1")
+
+    assert resultado == {
+        "registrado": False,
+        "error": "Solo se pueden registrar reclamos de pedidos entregados.",
+        "mensaje": "Solo se pueden registrar reclamos de pedidos entregados.",
+    }
+    assert sesion.reclamo_pendiente is None
+    assert cantidad_reclamos("P-1002") == 0
+
+
+def test_cliente_puede_cancelar_el_pendiente_sin_escribir():
+    _, sesion = preparar("P-1002", "C-01")
+
+    resultado = seleccionar(sesion, "cancelar")
+
+    assert resultado["cancelado"] is True
+    assert resultado["registrado"] is False
+    assert sesion.reclamo_pendiente is None
+    assert cantidad_reclamos("P-1002") == 0
 
 
 def test_pedido_mixto_exige_un_producto_que_pertenezca_al_pedido():

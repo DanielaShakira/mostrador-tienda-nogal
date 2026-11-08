@@ -11,10 +11,7 @@
     "argumentos": [
       {
         "herramienta": "registrar_reclamo",
-        "contiene": {
-          "numero_pedido": "P-1003",
-          "tipo_motivo": "defectuoso"
-        }
+        "contiene": {"numero_pedido": "P-1003"}
       }
     ],
     "estado_final": [
