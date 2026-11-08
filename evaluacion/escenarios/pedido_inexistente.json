@@ -1,0 +1,29 @@
+{
+  "nombre": "Consulta de pedido inexistente",
+  "descripcion": "El cliente consulta un número que no existe. Se verifican la llamada segura y la ausencia de nuevos registros; el evaluador no revisa el texto de la respuesta.",
+  "cliente": "C-01",
+  "turnos": [
+    "Necesito consultar el estado del pedido P-9999."
+  ],
+  "verificaciones": {
+    "herramientas_llamadas": ["consultar_pedido"],
+    "herramientas_no_llamadas": ["registrar_reclamo", "escalar_a_asesor"],
+    "argumentos": [
+      {
+        "herramienta": "consultar_pedido",
+        "contiene": {"numero_pedido": "P-9999"}
+      }
+    ],
+    "estado_final": [
+      {"archivo": "pedidos", "donde": {}, "cantidad": 15},
+      {
+        "archivo": "pedidos",
+        "donde": {"numero": "P-9999"},
+        "cantidad": 0
+      },
+      {"archivo": "reclamos", "donde": {}, "cantidad": 2},
+      {"archivo": "reembolsos", "donde": {}, "cantidad": 0},
+      {"archivo": "escalamientos", "donde": {}, "cantidad": 0}
+    ]
+  }
+}
