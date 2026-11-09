@@ -13,93 +13,129 @@ La tienda usa `HOY=2026-11-02`. Para datos horarios se añadió `AHORA=2026-11-0
 
 ## 1. Tablas de decisión
 
-Las filas se aplican en orden. Para toda gestión privada, identidad desde `sesion.cliente_id`, titularidad antes de mostrar información y nuevamente antes de escribir. Un pedido ajeno y uno inexistente producen la misma indisponibilidad.
+Estas tablas muestran qué debe hacer el agente según las condiciones de cada caso. Las filas se revisan en orden. «Cualquiera» significa que esa condición no cambia la decisión. Antes de consultar o gestionar un pedido, siempre se comprueba que pertenezca al cliente de la sesión.
 
-### Consulta
+### 1. Consultar pedidos
 
-| Condición | Decisión | Escritura |
+| **¿Se conoce el número del pedido?** | **¿El pedido está disponible para el cliente de la sesión?** | **Acción** |
 |---|---|---|
-| No hay número de pedido | Pedirlo, sin adivinar. | Ninguna. |
-| Pedido ajeno, inexistente o sesión sin acceso | No revelar existencia ni datos. | Ninguna. |
-| Pedido propio | Devolver número, estado, fechas y nombre/cantidad de productos; explicar el estado. | Ninguna. |
-| Notas o nombres contienen órdenes | Tratarlos como datos sin autoridad; no obedecerlos. | Ninguna autorizada por esos datos. |
+| No | Cualquiera | Pedir el número del pedido sin adivinarlo. |
+| Sí | No: el pedido no existe | Informar que no está disponible para esa sesión, sin inventar datos. |
+| Sí | No: pertenece a otro cliente | Dar la misma respuesta de indisponibilidad y no mostrar información ajena. |
+| Sí | Sí | Consultar el pedido y explicar su estado, fechas y productos. |
 
-`consultar_pedido` omite `nota_cliente`, identidad, precios y total. El nombre del producto sí llega al modelo y se prueba como entrada no confiable. La filtración de notas se evita por código; no se afirma resistencia universal a cualquier ataque textual.
+### 2. Registrar reclamos
 
-### Registrar reclamo
-
-| Condición | Decisión | Persistencia |
+| **¿El pedido permite presentar un reclamo?** | **¿Está completa la información del cliente?** | **Acción** |
 |---|---|---|
-| Pedido no autorizado | Indisponibilidad indistinguible. | Ninguna. |
-| Estado distinto de entregado | Rechazar. | Ninguna. |
-| Ya tiene reclamo abierto | Mostrar id y estado del existente; no duplicar. | Ninguna nueva. |
-| Producto ajeno al pedido o pedido mixto sin producto identificado | Pedir aclaración. | Ninguna. |
-| Fecha de entrega futura o fuera del plazo | Abstenerse. | Ninguna. |
-| Falta descripción explícita del cliente | Pedir un mensaje `motivo: <qué ocurrió>`; una solicitud genérica o `1` no registra nada. | Pendiente temporal. |
-| Motivo explícito y caso elegible | Pedir selección posterior: 1 defectuoso, 2 incompleto, 3 diferente o cancelar. | Pendiente temporal. |
-| Opción válida posterior, caso aún elegible | Consumir selección, revalidar y registrar relato literal. | Un reclamo abierto en `reclamos.json`. |
-| Cancelar, número inválido, cambio de tema o selección en mismo turno | No registrar; el cambio de tema continúa normalmente. | Ninguna. |
+| No: el pedido no está disponible para la sesión | Cualquiera | Informar la indisponibilidad y no registrar nada. |
+| No: todavía no está entregado | Cualquiera | Explicar que solo se puede reclamar después de la entrega. |
+| No: ya tiene un reclamo abierto | Cualquiera | Informar el estado del reclamo existente sin crear otro. |
+| No: venció el plazo o la entrega tiene una fecha futura | Cualquiera | Rechazar el registro y explicar el motivo. |
+| No se puede determinar: falta identificar el producto afectado | No | Preguntar cuál producto fue afectado para revisar su plazo. |
+| Sí | No: falta describir el motivo | Pedir al cliente que cuente qué ocurrió mediante un mensaje con `motivo:`. |
+| Sí | Hay motivo, pero falta elegir la causa | Preparar el reclamo y pedir una respuesta posterior: 1 defectuoso, 2 incompleto o 3 diferente. |
+| Sí | Sí: hay motivo y selección válida en un turno posterior | Revisar nuevamente las condiciones y guardar un único reclamo abierto. |
+| Sí | El cliente cancela, da una selección inválida o cambia de tema | No registrar el reclamo; si cambia de tema, atender la nueva solicitud. |
 
-Plazos calendario inclusivos desde entrega: perecedero 3 días; ropa/calzado 30; electrónica/electrodomésticos 90; hogar/demás 15. Preferente suma 15 días. Se acepta `0 <= dias <= plazo`; el día siguiente se rechaza. Un reclamo cerrado permite uno nuevo dentro del plazo; el límite es de un abierto por pedido.
+Los plazos desde la entrega son 3 días para perecederos, 30 para ropa y calzado, 90 para electrónica y electrodomésticos, y 15 para hogar y demás productos. Los clientes preferentes reciben 15 días adicionales. Se incluye el último día del plazo. La selección confirma la causa declarada por el cliente; el código no puede demostrar que su relato sea verdadero.
 
-El código exige que el cliente declare el motivo con `motivo:` y lo toma del mensaje real, no de argumentos generados por el LLM. Si llega antes del número puede conservarse hasta dos turnos siguientes, vinculado a cliente y pedido si fue indicado. Un motivo sin pedido explícito solo se usa para el siguiente caso que se prepara, se consume y no autoriza otro. Si no hay una descripción estructurada vigente se vuelve a pedir; no se sustituye por el número del pedido.
+### 3. Cancelar pedidos
 
-**Límite semántico:** Python puede garantizar procedencia, presencia y selección explícita, pero no demostrar que una descripción sea verdadera o corresponda materialmente a la causa seleccionada. No se simula esa comprensión con una lista de palabras. La suficiencia narrativa se guía mediante instrucciones y la defensa debe reconocer este límite.
-
-### Cancelar pedido
-
-| Condición | Decisión | Persistencia |
+| **¿En qué estado está el pedido?** | **¿Se cumple el plazo y existe confirmación del cliente?** | **Acción** |
 |---|---|---|
-| Falta número o pedido no autorizado | Pedir dato o devolver indisponibilidad. | Ninguna. |
-| Compra futura o datos incoherentes | Rechazar; no inventar hora. | Ninguna. |
-| Enviado | No cancelar; explicar rechazo en puerta o reclamo tras recepción. | Ninguna. |
-| Entregado o cancelado | No aplica; no repetir devolución. | Ninguna. |
-| Pagado | Elegible sin límite de antigüedad, salvo compra futura. | Solo preparación. |
-| En preparación con hora verificada, de 0 a 24 h inclusive | Elegible. | Solo preparación. |
-| En preparación con hora verificada, más de 24 h | Rechazar. | Ninguna. |
-| En preparación sin hora y compra de hoy | Elegible: dentro del mismo día la antigüedad es menor de 24 h. | Solo preparación. |
-| En preparación sin hora, compra de ayer | No se puede verificar el límite: abstenerse hasta contar con dato confiable. | Ninguna. |
-| En preparación sin hora, compra de hace dos o más días | Fuera de plazo. | Ninguna. |
-| Tiene devoluciones previas o total incompatible | No duplicar el total ni hacer cancelación parcial. | Ninguna nueva. |
-| Preparado, sin confirmación exacta posterior | No actuar. | Solo sesión. |
-| Confirmado y total hasta $300.000 | Cancelar y crear devolución automática aprobada del total. | `pedidos.json` y `reembolsos.json`. |
-| Confirmado y total mayor de $300.000 | Cancelar, solicitar devolución automática del total y escalar aprobación. | Pedido cancelado; reembolso solicitado; escalamiento con resumen. |
-| Cambiaron condiciones o falla escritura | No informar éxito; consumir autorización y restaurar datos anteriores. | Rollback o recuperación del diario. |
+| No está disponible para la sesión | Cualquiera | Informar la indisponibilidad y no cancelar. |
+| Tiene datos inválidos o una compra futura | Cualquiera | No cancelar hasta aclarar los datos. |
+| Tiene devoluciones previas que impiden devolver el total una sola vez | Cualquiera | No duplicar el reembolso ni hacer una cancelación parcial. |
+| Era elegible, pero cambiaron los datos antes de ejecutar | La confirmación corresponde a la preparación anterior | Descartar esa autorización y revisar si corresponde preparar de nuevo. |
+| Pagado | Todavía no hay confirmación válida | Preparar la cancelación y pedir confirmación antes de cambiar los datos. |
+| Pagado | Sí: confirmó en un turno posterior | Cancelar sin costo y registrar la devolución automática del total. |
+| En preparación | Dentro de 24 horas, pero sin confirmación válida | Preparar la cancelación y pedir confirmación. |
+| En preparación | Dentro de 24 horas y con confirmación posterior válida | Cancelar y registrar la devolución automática del total. |
+| En preparación | Pasaron más de 24 horas | Rechazar la cancelación y explicar que venció el plazo. |
+| En preparación | Compra de ayer sin hora confiable | No cancelar automáticamente: los datos no permiten comprobar las 24 horas. |
+| Enviado | Cualquiera | No cancelar; explicar que puede rechazar la entrega o reclamar después de recibir. |
+| Entregado o cancelado | Cualquiera | Informar que la cancelación no aplica y no repetir la devolución. |
 
-Una sola autorización informa cancelación y devolución automática del total. El tope humano sigue aplicando aunque el trámite sea automático: por encima de $300.000 se solicita la devolución, no se aprueba ni se paga autónomamente.
+Las 24 horas incluyen el límite exacto. Si solo hay fecha, una compra de hoy está dentro del mismo día y una de hace dos o más días queda fuera; una de ayer necesita hora confiable. Si la devolución total supera $300.000, se registra como solicitada y se escala al asesor; no se aprueba automáticamente.
 
-### Solicitar reembolso
+### 4. Solicitar reembolsos
 
-Se define A = suma de aprobados del pedido; S = suma de solicitudes pendientes. Saldo disponible = total pagado - A - S. Las solicitudes reservan saldo y evitan duplicados. Pesos COP enteros positivos; se rechazan booleanos, fracciones, texto numérico, cero y negativos en argumentos financieros.
-
-| Condición | Decisión | Persistencia |
+| **¿El reembolso procede y tiene saldo disponible?** | **¿El cliente confirmó y cuál es el monto acumulado?** | **Acción** |
 |---|---|---|
-| Falta número o monto | Pedirlo; no adivinar. | Ninguna. |
-| Pedido no autorizado | Indisponibilidad indistinguible. | Ninguna. |
-| No cancelado y sin reclamo abierto propio | Rechazar; reclamo cerrado no habilita. | Ninguna. |
-| Monto inválido o A + S + monto > total | Rechazar sin recortar ni escalar una solicitud inválida. | Ninguna. |
-| Ya hay solicitud pendiente | Informar que existe trámite; no duplicar. | Ninguna nueva. |
-| Procedente, con saldo y sin confirmación posterior | Mostrar acción, pedido, monto y consecuencias. | Pendiente inmutable. |
-| Confirmación válida y A + monto <= $300.000 | Revalidar y aprobar el monto confirmado. | `reembolsos.json`. |
-| Confirmación válida y A + monto > $300.000 | Solicitar y escalar; nunca aprobar. | Reembolso solicitado y escalamiento. |
-| Código falso, otro cliente, otro pedido, reutilización o cambio de condiciones | No actuar; nueva preparación si corresponde. | Ninguna nueva. |
+| No se sabe: falta número o monto | Cualquiera | Pedir el dato que falta sin inventarlo. |
+| No: el pedido no está disponible para la sesión | Cualquiera | Informar la indisponibilidad y no registrar devolución. |
+| No: el pedido no está cancelado ni tiene reclamo abierto | Cualquiera | Rechazar por falta de una condición válida. |
+| No: el monto es inválido o supera el saldo disponible | Cualquiera | Rechazar sin recortar el monto ni escalar una solicitud inválida. |
+| Ya existe una solicitud pendiente para el pedido | Cualquiera | Informar que hay un trámite pendiente y no crear otro. |
+| Las condiciones cambiaron después de preparar | Existe una confirmación de la preparación anterior | No ejecutar con esa autorización; pedir una nueva preparación y confirmación si corresponde. |
+| Sí | Todavía no hay confirmación válida | Preparar la solicitud, mostrar el monto y pedir confirmación. |
+| Sí | Confirmó y el acumulado no supera $300.000 | Registrar el reembolso aprobado después de revisar nuevamente las condiciones. |
+| Sí | Confirmó y el acumulado supera $300.000 | Registrar el reembolso solicitado y escalar su aprobación a un asesor. |
 
-El control por pedido es acumulado: $200.000 aprobados más $150.000 nuevos requieren asesor. No se puede eludir dividiendo solicitudes. El helper interno de escalamiento verifica el acumulado contra movimientos persistidos; no confía en un total declarado por el modelo.
+El saldo disponible es el total pagado menos los reembolsos aprobados y las solicitudes pendientes. El tope se suma por pedido: $200.000 aprobados más $150.000 nuevos requieren asesor. Los montos deben ser enteros positivos en pesos. Un registro aprobado en esta aplicación no significa que ya se haya hecho un pago bancario.
 
-### Escalar
+### 5. Escalar a un asesor
 
-| Condición | Decisión | Evidencia |
+| **¿Qué situación presenta el cliente?** | **¿Qué condición se cumple?** | **Acción** |
 |---|---|---|
-| Cliente pide asesor explícitamente | Escalar. | Causal `solicitud_asesor`, resumen y cliente de sesión. |
-| Reporta cobro no reconocido o posible fraude | Escalar sin movimientos financieros. | Causal correspondiente y resumen. |
-| Primer o segundo fallo confirmado del mismo caso | Continuar atención. | Contador en `CasoSoporte`. |
-| Tercer fallo confirmado | Escalamiento interno automático. | `tres_intentos_sin_resolver` y caso/contador en Python. |
-| Cliente informa resuelto | Cerrar seguimiento sin escalar. | Estado de caso en sesión. |
-| Reembolso válido que excede acumulado autónomo | Escalar para aprobación; no presentar como pago. | `reembolso_superior_300000`. |
-| Mismo caso ya escalado | Reutilizar id cuando coincide clave de deduplicación. | Sin duplicado. |
-| Sin causal habilitada | No escalar automáticamente. | Ninguna escritura. |
+| El mismo caso ya fue escalado | Se identifica el registro existente | Reutilizar el registro cuando corresponda, sin duplicarlo. |
+| Pide hablar con una persona o asesor | La solicitud es explícita | Escalar sin exigir primero número de pedido ni más detalles como requisito. |
+| Reporta un cobro que no reconoce | Cualquiera | Escalar por cobro no reconocido sin hacer movimientos financieros. |
+| Reporta un posible fraude | Cualquiera | Escalar el caso para revisión humana. |
+| Solicita un reembolso válido | Está confirmado y supera el tope acumulado de $300.000 | Escalar la aprobación y dejar el reembolso solicitado, no aprobado. |
+| El problema sigue sin resolver | Hay uno o dos intentos fallidos confirmados | Continuar la atención sin escalar todavía por esa causa. |
+| El problema sigue sin resolver | Hay tres intentos fallidos confirmados del mismo caso | Escalar automáticamente desde el código. |
+| El cliente informa que el problema se resolvió | Responde al seguimiento pendiente | Cerrar el seguimiento sin escalar por tres intentos. |
+| No se presenta una causa de escalamiento | Cualquiera | Continuar la atención sin escalar automáticamente. |
 
-Siempre se exige resumen no vacío y se informa contacto en máximo un día hábil. No se inventa una fecha exacta sin calendario laboral. Causales conversacionales son interpretadas por el modelo; Python limita las causales y garantiza titularidad y persistencia, no comprensión universal del lenguaje.
+Al escalar se guarda un resumen breve del caso y se informa que un asesor lo contactará en máximo un día hábil. Un mensaje, una pregunta o una llamada de herramienta no cuentan por sí solos como un intento fallido.
+
+### 6. Dejar rastro de cada acción
+
+| **¿Qué acción se realizó?** | **¿Se completó correctamente?** | **Acción** |
+|---|---|---|
+| Registrar un reclamo | Sí | Guardar el registro en `tienda/datos/reclamos.json`. |
+| Solicitar o aprobar un reembolso | Sí | Guardar monto, pedido, cliente y estado en `tienda/datos/reembolsos.json`. |
+| Escalar a un asesor | Sí | Guardar la causa y el resumen en `tienda/datos/escalamientos.json`. |
+| Cancelar un pedido | Sí | Cambiar el estado en `pedidos.json` y guardar la devolución total en `reembolsos.json`; si es alta, guardar también el escalamiento. |
+| Consultar o preparar una operación | Sí, pero no se ejecutó una acción de negocio | Mostrar el resultado o la preparación sin crear registros de reclamo, devolución o escalamiento por esa sola consulta. |
+| Ejecutar una acción | No: falta información, no está permitida o no fue confirmada | No crear el registro de la acción rechazada. |
+| Guardar una operación con varias escrituras | No: falló alguna escritura | Recuperar el estado anterior y no informar un éxito incompleto. |
+
+Los escenarios revisan los archivos para comprobar que exista el registro esperado o que los datos sigan sin cambios cuando no debía ocurrir una acción.
+
+### 7. Pedir confirmación explícita
+
+| **¿Hay una operación preparada?** | **¿Qué respondió el cliente?** | **Acción** |
+|---|---|---|
+| No | Cualquiera | No ejecutar una cancelación ni un reembolso; primero preparar la operación. |
+| Sí | Todavía no ha respondido | Mostrar pedido, monto y consecuencias, y pedir `confirmar <codigo>`. |
+| Sí | Envía el código en el mismo turno de preparación | No ejecutar; la confirmación debe llegar en un turno posterior. |
+| Sí | Envía la frase correcta en otro turno y las condiciones siguen iguales | Revisar las reglas, usar la autorización una sola vez y ejecutar. |
+| Sí | Dice solamente «sí», envía un código incorrecto o desiste | No ejecutar y descartar la preparación. |
+| Sí | Cambia de tema | Descartar la preparación y atender la nueva solicitud. |
+| Sí, pero cambió el cliente, el pedido, el monto o las condiciones | Envía una confirmación anterior | No ejecutar con esa autorización; preparar y confirmar de nuevo si corresponde. |
+| La autorización ya se utilizó | Repite el código | No repetir la acción. |
+
+Python genera y comprueba el código antes de volver a consultar al modelo. El modelo no tiene una herramienta para confirmar ni puede autorizar enviando `confirmado=true`. Al cancelar, la confirmación informa también la devolución automática del total.
+
+### 8. Pedir lo que falte
+
+| **¿Qué situación se presenta?** | **¿Se puede continuar con lo disponible?** | **Acción** |
+|---|---|---|
+| Falta el número de pedido | No | Preguntarlo sin elegir uno por el cliente. |
+| Falta el monto del reembolso | No | Pedir la cantidad en pesos sin asumir el total. |
+| Falta el motivo del reclamo | No | Pedir que describa qué ocurrió con el producto mediante `motivo:`. |
+| Hay productos de distintas categorías y no se identifica el afectado | No | Preguntar cuál producto presenta el problema. |
+| Falta la hora confiable de una compra de ayer en preparación | No se puede comprobar el límite de 24 horas | Explicar la falta de información y no cancelar automáticamente ni inventar una hora. |
+| El pedido no existe | No | Informar que no está disponible para la sesión, sin inventar datos. |
+| El pedido pertenece a otra persona | No | Dar la misma respuesta de indisponibilidad sin revelar información ajena. |
+| La política no permite la acción | No, aunque estén todos los datos | Abstenerse y explicar el motivo. |
+| Pide cambiar dirección, precio o datos personales | No por este canal | Informar que esa gestión no está permitida. |
+| Están los datos necesarios y la política permite continuar | Sí | Usar la herramienta correspondiente y pedir confirmación si la acción lo exige. |
+
+Las instrucciones ayudan al modelo a preguntar y explicar; las herramientas rechazan argumentos incompletos y acciones prohibidas. La calidad de la respuesta también se revisa en las trazas.
 
 ## 2. Ambigüedades y decisiones
 
