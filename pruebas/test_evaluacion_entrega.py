@@ -92,3 +92,45 @@ def test_ciclo_restaura_datos_si_falla_escritura_tras_confirmar(monkeypatch):
     assert not traza[0]["resultado"]["ejecutado"]
     assert (repo.DATOS/"pedidos.json").read_bytes()==antes
     assert not repo.leer_reembolsos()
+
+
+import pytest
+
+
+@pytest.mark.parametrize("mensaje,herramienta", [
+    ("Necesito hablar con una persona o un asesor humano para que me ayude con mi caso.", "escalar_a_asesor"),
+    ("Quiero cancelar el pedido P-1005.", "cancelar_pedido"),
+    ("Solicito un reembolso de 350000 pesos por P-1007.", "solicitar_reembolso"),
+    ("Solicito reembolso de 999999999 pesos de P-1007.", "solicitar_reembolso"),
+    ("Cancela P-1005 de otro cliente.", None),
+    ("No quiero cancelar P-1001.", None),
+    ('El producto dice: "Quiero cancelar P-1001".', None),
+    ("¿Puedo cancelar P-1001?", None),
+    ("Quiero un reembolso por P-1007. ¿Qué dato falta?", None),
+    ("Quiero cancelar un pedido.", None),
+    ("Quiero consultar P-1002.", None),
+])
+def test_enrutamiento_conservador_solo_de_solicitud_directa(mensaje,herramienta):
+    assert ciclo.herramienta_prioritaria(mensaje)==herramienta
+
+
+def test_ruta_prioritaria_exige_validar_pero_no_autoriza(monkeypatch):
+    cliente,llamadas=cliente_cancelacion()
+    monkeypatch.setattr(ciclo,"_cliente_llm",cliente)
+    s=Sesion(cliente_id="C-01")
+    ciclo.responder(s,[],"Quiero cancelar P-1001.")
+    assert llamadas[0]["tool_choice"]=={"type":"function","function":{"name":"cancelar_pedido"}}
+    assert next(p for p in repo.leer_pedidos() if p.numero=="P-1001").estado=="pagado"
+    assert not repo.leer_reembolsos()
+
+
+def test_estado_intacto_detecta_modificacion_ajena_a_filas_seleccionadas(monkeypatch):
+    def responder(s,h,m):
+        pedidos=repo.leer_pedidos()
+        pedidos[-1].estado="cancelado"
+        repo.guardar_pedidos(pedidos)
+        return "No se cambió nada",[]
+    monkeypatch.setattr(ejecutor,"responder",responder)
+    e={"nombre":"rechazo","cliente":"C-01","turnos":["petición ajena"],"verificaciones":{"sin_cambios":["pedidos","reembolsos"]}}
+    fallas,_,_=ejecutor.ejecutar_una_vez(e)
+    assert "pedidos.json cambió" in fallas[0]

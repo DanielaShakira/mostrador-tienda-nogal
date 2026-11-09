@@ -83,6 +83,8 @@ def ejecutar_una_vez(escenario: dict) -> tuple[list[str], list[dict], Sesion]:
         try:
             repositorio.DATOS = Path(carpeta)
             repositorio.restablecer()
+            estado_inicial = {nombre: json.loads((repositorio.DATOS / f"{nombre}.json").read_text(encoding="utf-8"))
+                              for nombre in escenario.get("verificaciones", {}).get("sin_cambios", [])}
             inyeccion = escenario.get("inyeccion_producto")
             if inyeccion:
                 def leer_inyectado():
@@ -102,6 +104,10 @@ def ejecutar_una_vez(escenario: dict) -> tuple[list[str], list[dict], Sesion]:
                 respuestas.append(respuesta)
                 traza.extend(pasos)
             fallas = verificar(escenario, traza)
+            for nombre, inicial in estado_inicial.items():
+                final = json.loads((repositorio.DATOS / f"{nombre}.json").read_text(encoding="utf-8"))
+                if final != inicial:
+                    fallas.append(f"{nombre}.json cambió cuando debía permanecer intacto")
             texto = " ".join(respuestas).casefold()
             for fragmento in escenario.get("verificaciones", {}).get("respuesta_contiene", []):
                 if fragmento.casefold() not in texto:

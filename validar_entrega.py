@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+import uuid
 
 raiz = Path(__file__).resolve().parent
 os.chdir(raiz)
@@ -10,12 +11,22 @@ os.environ["PYTHONUTF8"] = "1"
 if not all(os.environ.get(k) for k in ("LLM_API_KEY", "LLM_BASE_URL")):
     raise SystemExit("Faltan LLM_API_KEY o LLM_BASE_URL en esta terminal. No se ejecutaron escenarios.")
 informes = raiz / "evaluacion" / "informes"
-r = subprocess.run([sys.executable, "-m", "pytest", "-q"], capture_output=True, text=True, encoding="utf-8", errors="replace")
+temporal = raiz / ".local" / ("pytest-" + uuid.uuid4().hex)
+temporal.parent.mkdir(exist_ok=True)
+r = subprocess.run([sys.executable, "-m", "pytest", "-q", "--basetemp", str(temporal)], capture_output=True, text=True, encoding="utf-8", errors="replace")
 (informes / "pytest-final.txt").write_text(r.stdout + r.stderr, encoding="utf-8")
 print(r.stdout)
 if r.returncode:
     raise SystemExit(r.returncode)
-codigo = subprocess.call([sys.executable, "-m", "evaluacion.ejecutor", "-n", "5"])
+import argparse
+parser = argparse.ArgumentParser()
+parser.add_argument("--corregidos", action="store_true", help="Una repetición de los cinco casos ajustados; si pasan, evaluación completa con cinco repeticiones")
+opciones = parser.parse_args()
+casos = ["cancelacion_limite_24h", "cancelacion_pedido_ajeno", "escalamiento_asesor", "reembolso_sin_procedencia", "reembolso_superior_pagado"]
+rutas = [str(raiz / "evaluacion" / "escenarios" / (caso + ".json")) for caso in casos] if opciones.corregidos else []
+codigo = subprocess.call([sys.executable, "-m", "evaluacion.ejecutor", "-n", "1", *rutas]) if rutas else 0
+if codigo == 0:
+    codigo = subprocess.call([sys.executable, "-m", "evaluacion.ejecutor", "-n", "5"])
 print("Validación terminada. Los informes están en", informes)
 # Iniciar la versión nueva conservando las variables de esta terminal.
 import socket

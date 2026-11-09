@@ -13,7 +13,6 @@ from agente.herramientas.registro import ejecutar, esquemas
 from agente.pendientes import procesar_operacion_pendiente
 from agente.herramientas.reclamos import capturar_motivo
 from agente.sesion import FinanzasPendientes
-from tienda import repositorio
 from agente.sesion import MODELO, Sesion, crear_cliente_llm
 
 MAX_ITERACIONES = 8
@@ -33,6 +32,25 @@ def _como_json(texto: str):
         return json.loads(texto or "{}")
     except ValueError:
         return texto
+
+
+def herramienta_prioritaria(mensaje: str) -> str | None:
+    """Enruta solicitudes directas reales; NO autoriza escrituras ni confirma.
+
+    Solo patrones conservadores de primera persona al inicio. Preguntas,
+    negaciones, citas y datos devueltos por herramientas no activan esta ruta.
+    """
+    texto = " ".join(mensaje.split()).casefold()
+    inicio = r"^(?:hola[,!. ]+)?"
+    if re.search(inicio + r"(?:necesito|quiero|deseo|solicito)\s+(?:hablar|comunicarme|contactar)\s+con\s+(?:un[ao]?\s+)?(?:persona|asesor(?:a)?|humano|agente humano)\b", texto):
+        return "escalar_a_asesor"
+    if not re.search(r"\bp-\d+\b", texto) or "otro cliente" in texto:
+        return None
+    if re.search(inicio + r"(?:quiero|deseo|solicito)\s+cancelar\b", texto):
+        return "cancelar_pedido"
+    if re.search(inicio + r"(?:solicito|quiero|deseo|pido)\s+(?:un\s+)?reembolso\b", texto) and re.search(r"\bde\s+\$?\s*[\d.,]+\s*(?:pesos|cop)\b", texto):
+        return "solicitar_reembolso"
+    return None
 
 
 def responder(sesion: Sesion, historial: list[dict], mensaje: str) -> tuple[str, list[dict]]:
@@ -58,13 +76,16 @@ def responder(sesion: Sesion, historial: list[dict], mensaje: str) -> tuple[str,
 
     _cliente_llm = _cliente_llm or crear_cliente_llm()
 
-    for _ in range(MAX_ITERACIONES):
+    prioritaria = herramienta_prioritaria(mensaje)
+    for iteracion in range(MAX_ITERACIONES):
         instrucciones = _instrucciones()
         sistema = [{"role": "system", "content": instrucciones}] if instrucciones else []
         respuesta = _cliente_llm.chat.completions.create(
             model=MODELO,
             messages=sistema + historial,
             tools=esquemas() or None,
+            **({"tool_choice": {"type": "function", "function": {"name": prioritaria}}}
+               if iteracion == 0 and prioritaria else {}),
         )
         sesion.tokens_entrada += respuesta.usage.prompt_tokens
         sesion.tokens_salida += respuesta.usage.completion_tokens

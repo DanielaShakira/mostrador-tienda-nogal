@@ -54,3 +54,6 @@ Los escenarios con `{{confirmacion_financiera}}` construyen el turno del cliente
 - Evidencia: evaluacion/informes/ y pruebas/.
 
 La aplicación simula registros de devolución y no mueve dinero bancario. Pendientes/casos se pierden al reiniciar; hace falta una nueva preparación y confirmación. Mantener la política y no modificar main durante la preparación del PR. El grupo entrega un solo enlace de PR en NPlad y confirma allí el plazo de la actividad.
+
+
+Grupo 5 solicitó que el trabajo final se publique en `Prueba`, con PR hacia main. `python validar_entrega.py --corregidos` prueba primero los cinco escenarios corregidos una sola vez y, si pasan, ejecuta todos con cinco repeticiones. Conserva ambos informes y los anteriores; no sustituye ni elimina resultados fallidos.

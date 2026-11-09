@@ -1,13 +1,13 @@
 # Análisis del agente de Tienda Nogal
 
-Grupo: pendiente de dato del grupo.
+Grupo: 5.
 Integrantes: pendientes de dato del grupo.
 
 ## Alcance y fuentes
 
 Fuente obligatoria: `tienda/datos/politicas.md`, vigente desde 2026-09-01. Requisitos de ejecución, evaluación y entrega: `GUIA.md` y actividad suministrada por el grupo. El traspaso del compañero corresponde al commit `2d90945` de `feature/base-reclamos`.
 
-Las decisiones financieras se documentaron antes de escribir código. Esta versión describe los controles implementados en la rama `entrega`; no confunde especificación con resultados observados del modelo. Los resultados históricos del compañero se conservan como antecedentes en `REVISION_TRASPASO.md`, no como una evaluación nueva.
+Las decisiones financieras se documentaron antes de escribir código. Esta versión describe los controles implementados en la rama `Prueba` (solicitada por Grupo 5); no confunde especificación con resultados observados del modelo. Los resultados históricos del compañero se conservan como antecedentes en `REVISION_TRASPASO.md`, no como una evaluación nueva.
 
 La tienda usa `HOY=2026-11-02`. Para datos horarios se añadió `AHORA=2026-11-02T12:00:00-05:00`, reloj explícito de la simulación. Nunca se calculan plazos usando la fecha real del equipo.
 
@@ -171,7 +171,7 @@ La persistencia se amplió porque cancelar implica varias escrituras: bloqueo en
 ### Evidencia comprobada
 
 - El traspaso original pasó 103 pruebas; la brecha de motivo se reprodujo antes de corregirla.
-- Suite ampliada comprobada: 161 pruebas aprobadas, sin llamadas al modelo. La salida final reproducible queda en `evaluacion/informes/pytest-final.txt`.
+- Suite ampliada comprobada: 174 pruebas aprobadas, sin llamadas al modelo. La salida final reproducible queda en `evaluacion/informes/pytest-final.txt`.
 - Hay 30 escenarios JSON con los siete casos mínimos y casos financieros adicionales. Los pedidos propios P-1016 y P-1017 permanecen en semilla: cubren fronteras de hogar regular y perecedero preferente.
 - La evaluación final real con cinco repeticiones necesita las variables de entorno del grupo. Su tasa final solo se completará desde el informe generado, nunca a partir de pruebas con dobles ni ejecuciones históricas.
 
@@ -189,4 +189,13 @@ Con una semana adicional usaríamos base de datos transaccional, estado de casos
 
 ### Entrega
 
-Rama `entrega`, PR hacia `main` con plantilla, informe -n 5, salida pytest y decisiones. El grupo aporta integrantes, asigna al profesor como revisor y presenta en NPlad un solo enlace al PR. La fecha límite es la de NPlad; no se inventa aquí. No se cambia main ni se fusiona el PR como parte de esta preparación.
+Rama `Prueba` por solicitud explícita del Grupo 5, PR hacia `main` con plantilla, informe -n 5, salida pytest y decisiones. El grupo aporta integrantes, asigna al profesor como revisor y presenta en NPlad un solo enlace al PR. La fecha límite es la de NPlad; no se inventa aquí. No se cambia main ni se fusiona el PR como parte de esta preparación.
+
+
+### Primera evaluación real y correcciones
+
+El informe `informe-20261109-000826.md` registró 139/150 (93% redondeado), con cinco repeticiones de cada uno de los 30 casos. No se reemplaza ni se presenta como 100%. Cinco fallos correspondían al escenario de pedido ajeno: el agente se abstuvo sin llamar a cancelar y el escenario exigía esa llamada. Se corrigió para aceptar abstención directa y comparar todo el contenido de pedidos, reclamos, reembolsos y escalamientos con la semilla; las pruebas unitarias mantienen la invocación adversarial directa a las herramientas.
+
+Los otros seis fallos revelaron demoras indebidas o inferencias sobre campos que la consulta no devolvía. Se añadieron instrucciones para preparar solicitudes completas directamente, sin una pregunta previa, y para escalar asesor sin pedir más detalles como requisito. El ciclo usa `tool_choice` en la primera llamada para patrones conservadores de solicitudes directas reales: asesor; cancelación con número; reembolso con número y monto. Esta ruta decide qué herramienta debe VALIDAR, nunca autoriza una escritura ni interpreta una confirmación. Solo evalúa el mensaje del usuario, nunca texto recuperado; preguntas, citas y negaciones fuera de esos patrones conservadores permanecen con el flujo normal. Las invariantes siguen dentro de las herramientas y el enrutador único de pendientes no se duplicó.
+
+El Grupo 5 pidió subir el trabajo en `Prueba`, aunque la actividad menciona `entrega`; se conserva la rama previa y el PR definitivo usa la rama solicitada. Los nombres de integrantes y el usuario del profesor siguen pendientes de dato humano.
