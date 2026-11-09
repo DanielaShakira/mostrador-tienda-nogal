@@ -166,73 +166,49 @@ Las instrucciones orientan al modelo. La autorización y las reglas determinista
 
 La persistencia se amplió porque cancelar implica varias escrituras: bloqueo entre hilos/procesos y diario del estado anterior. Si una escritura falla se restaura; si se interrumpe el proceso, la siguiente lectura recupera el diario antes de exponer datos. La operación no se informa como exitosa antes de terminar. Este mecanismo está pensado para los archivos de una tienda local; no reemplaza una base de datos ni garantiza comportamiento ante daño físico del disco.
 
-### 4.1. Dejar rastro de cada acción en los datos
+## 5. Registro de las acciones en los datos
 
-**Requisito:** los reclamos deben persistirse en `reclamos.json`, los reembolsos en `reembolsos.json` y los escalamientos en `escalamientos.json`, para que los escenarios comprueben tanto la ejecución como la ausencia de una acción prohibida. Estos archivos están en `tienda/datos/`; `tienda/semilla/` es el estado inicial reproducible de la actividad.
+Cada acción que realiza el agente debe quedar guardada. No basta con que responda que hizo algo: debe existir el registro para comprobarlo después.
 
-La respuesta del modelo no constituye evidencia de una acción. Decir «registré el reclamo» no basta: debe existir el registro correspondiente. Consultar o preparar una operación tampoco equivale a ejecutarla.
+Los reclamos se guardan en `tienda/datos/reclamos.json`, los reembolsos en `tienda/datos/reembolsos.json` y los escalamientos en `tienda/datos/escalamientos.json`. Cada registro incluye el cliente, el pedido cuando corresponde y los datos de la gestión. Por ejemplo, un reclamo conserva el motivo descrito por el cliente; un reembolso guarda el monto y si está solicitado o aprobado; un escalamiento deja un resumen para el asesor.
 
-| Acción ejecutada | Archivo que constituye la evidencia | Datos persistidos y comprobación |
-|---|---|---|
-| Registrar reclamo | `tienda/datos/reclamos.json` | Identificador, número de pedido, cliente de sesión, fecha simulada, motivo del cliente y estado abierto. `guardar_reclamos` solo se llama después de la selección real posterior y la revalidación. |
-| Solicitar/aprobar reembolso | `tienda/datos/reembolsos.json` | Identificador, pedido, cliente, fecha, monto, motivo, estado solicitado/aprobado y medio de pago original. Una preparación sin confirmación no crea este registro. |
-| Escalar a asesor | `tienda/datos/escalamientos.json` | Identificador, cliente, pedido si corresponde, fecha, causal y resumen del caso. Los casos repetidos pueden reutilizar un registro existente según su clave de deduplicación. |
-| Cancelar pedido | `tienda/datos/pedidos.json` y `tienda/datos/reembolsos.json` | El pedido pasa a cancelado y se registra una sola devolución del total. Si supera el tope autónomo, además se guarda un escalamiento y la devolución queda solicitada. |
-| Rechazar, abstenerse o esperar datos/confirmación | Ningún registro nuevo de la acción de negocio rechazada | Se conservan los datos previos. La traza puede mostrar el error o la preparación, pero no se inventa un reclamo, reembolso o escalamiento para simular que hubo éxito. Un escalamiento que sí sea procedente constituye otra acción y debe tener su propio registro. |
+Cuando se cancela un pedido, también se cambia su estado en `pedidos.json` y se registra la devolución del total. Si esa devolución supera los $300.000, queda solicitada y se guarda el escalamiento para que un asesor la apruebe. Si falla alguna de esas escrituras, se recupera el estado anterior para no dejar una cancelación a medias.
 
-**Mecanismo en código:** `registrar_reclamo`/`procesar_seleccion_reclamo`, `procesar_confirmacion_financiera` y los helpers de escalamiento llaman las funciones `guardar_*` de `tienda/repositorio.py`. Las escrituras relacionadas se agrupan mediante `transaccion`: si falla el reembolso de una cancelación se restaura el estado anterior, en lugar de informar un éxito incompleto.
+Si la acción se rechaza, falta información o todavía no hay confirmación, no se crea el registro de esa acción. Preparar una cancelación no significa que el pedido ya esté cancelado.
 
-**Cómo lo comprueba la evaluación:** `evaluacion/ejecutor.py::verificar` lee los JSON y aplica `estado_final`. Una regla con `donde` selecciona el pedido o registro; `cantidad: 1` comprueba su existencia, `esperado` revisa valores como monto/estado y `cantidad: 0` demuestra que no se creó la acción. Cuando ya hay datos de semilla se compara con el estado esperado, no se supone que todo archivo deba quedar vacío. `sin_cambios` permite comparar el contenido completo con el inicial.
+Los escenarios revisan estos archivos para comprobar lo que ocurrió. Buscan el registro esperado, revisan su monto o estado y también verifican que no aparezcan registros cuando la acción no debía realizarse. Esto se comprueba, por ejemplo, en los escenarios de reclamo válido, cancelación confirmada, reembolso sobre el tope y cancelación sin confirmación. Las pruebas usan copias temporales de los datos para no alterar lo que está abierto en la aplicación.
 
-**Evidencia:** escenarios `reclamo_valido`, `cancelacion_confirmada`, `reembolso_sobre_tope`, `escalamiento_asesor`, `cancelacion_sin_confirmacion` y `cancelacion_pedido_ajeno`; pruebas en `test_reclamos.py`, `test_finanzas.py`, `test_escalamiento.py` y `test_evaluacion_entrega.py`. Las evaluaciones usan copias temporales de semilla: comprueban las escrituras sin alterar los datos abiertos en la interfaz.
+## 6. Confirmación antes de cancelar o reembolsar
 
-### 4.2. Pedir confirmación explícita antes de cancelar o reembolsar
+Antes de cancelar o solicitar un reembolso, el cliente debe confirmar lo que desea hacer. Esta confirmación se controla en Python y no se deja a la interpretación del modelo.
 
-**Requisito:** el cliente debe autorizar explícitamente la cancelación o el reembolso antes de ejecutar, con un mecanismo que el modelo no pueda sustituir por un argumento o una afirmación.
+Primero se prepara la operación y se muestran el pedido, el monto y las consecuencias. En ese momento no se modifican los datos. El programa genera un código y pide al cliente que responda en un mensaje posterior con `confirmar <codigo>`. En una cancelación se informa también la devolución automática del total, de modo que una sola confirmación cubra ambas consecuencias.
 
-Se implementa el siguiente protocolo en Python:
+La respuesta se revisa antes de volver a consultar al modelo. No sirve que el modelo diga que el cliente ya confirmó ni que envíe un argumento como `confirmado=true`. Tampoco basta con responder solamente «sí». El mensaje debe contener la confirmación correspondiente a la operación que está pendiente.
 
-1. `cancelar_pedido` y `solicitar_reembolso` validan y **preparan**, sin cambiar los JSON de negocio.
-2. La sesión guarda un `FinanzasPendientes` inmutable: cliente, tipo de acción, pedido, monto, motivo, turno de preparación, código generado por Python y huella de las condiciones relevantes.
-3. Python muestra al cliente la acción, el monto y sus consecuencias y pide la frase `confirmar <codigo>`. La cancelación incluye explícitamente su devolución automática del total en una sola autorización conjunta.
-4. El cliente debe enviar la frase correspondiente en un **turno posterior real**. Se normalizan mayúsculas y espacios; no se acepta un código distinto. Un `sí` genérico no autoriza.
-5. `agente/pendientes.py::procesar_operacion_pendiente` entrega ese mensaje a `procesar_confirmacion_financiera` antes de consultar al LLM. La confirmación válida se procesa sin pedir al modelo que decida si hubo consentimiento.
-6. Antes de escribir se comprueba la identidad y se revalidan titularidad, estado, tiempo, procedencia, saldo y tope. Si cambian las condiciones respecto de la preparación, la autorización anterior no sirve.
-7. El pendiente se consume una sola vez. No puede reutilizarse para repetir la acción, cambiar pedido/monto o autorizar otra operación. Una negativa, un código falso o un cambio de tema descartan la preparación según el protocolo. Tras reinicio o cambio de cliente se necesita una preparación nueva.
+Antes de ejecutar, el código vuelve a revisar que el pedido pertenezca al cliente y que se sigan cumpliendo las condiciones de la política. También comprueba que no hayan cambiado el monto ni los datos usados para preparar la operación. Si algo cambió, hay que preparar y confirmar de nuevo.
 
-**Por qué no puede autorizarlo el modelo:** el esquema público no admite `confirmado`, `confirmacion_cliente`, `codigo` ni identidad alternativa. Esos campos se rechazan como argumentos adicionales. `procesar_confirmacion_financiera` es una función interna y no está registrada como herramienta del LLM; la entrada confiable es el mensaje recibido del cliente, no texto generado por el modelo. `tool_choice` solo exige una herramienta de validación para determinadas solicitudes directas y nunca constituye confirmación.
+Cada confirmación se usa una sola vez. No permite repetir un reembolso ni autorizar otro pedido. Si el cliente desiste, cambia de tema o envía un código incorrecto, se descarta la preparación. Al reiniciar la sesión también hace falta una nueva preparación.
 
-**Evidencia:** `test_finanzas.py` cubre falta de confirmación, mismo turno, código falso, sí genérico, argumentos fabricados, identidad cambiada, condiciones modificadas, consumo único y dos sesiones intentando la misma cancelación. `test_evaluacion_entrega.py` comprueba el ciclo completo y que confirmar no produzca otra llamada al modelo. Los escenarios `cancelacion_confirmada`, `cancelacion_sin_confirmacion`, `confirmacion_generica_no_autoriza`, `reembolso_tope_exacto` y `reembolso_sobre_tope` comprueban las consecuencias persistidas.
+Este mecanismo está en `agente/herramientas/finanzas.py`, junto con el estado de sesión y el manejo de pendientes. Las pruebas comprueban códigos incorrectos, confirmaciones en el mismo turno, intentos de reutilización y cambios de cliente o de datos. Los escenarios de cancelación confirmada, cancelación sin confirmación y confirmación con un «sí» verifican que solo se guarde la acción cuando realmente fue autorizada.
 
-En escenarios, `{{confirmacion_financiera}}` construye un mensaje del cliente a partir del desafío mostrado; atraviesa el mismo ciclo de producción. No es una herramienta privilegiada para omitir la autorización.
+## 7. Información faltante, pedidos inexistentes y acciones no permitidas
 
-### 4.3. Pedir lo que falte, reconocer pedidos inexistentes y abstenerse
+Cuando falta un dato, el agente debe pedirlo antes de continuar. Si el cliente no da el número de pedido, se le pregunta; si quiere un reembolso y no indica el monto, se le pide la cantidad; si quiere reclamar y no cuenta qué ocurrió, se le solicita el motivo. En un pedido con productos de categorías distintas también se pregunta cuál fue el afectado, porque de eso depende el plazo.
 
-**Requisito:** ante información incompleta se pide el dato; ante un pedido que no se puede recuperar no se inventa información; si la política prohíbe la acción, el sistema no la ejecuta.
+El modelo no debe completar esos datos por su cuenta. Las herramientas exigen los campos necesarios y rechazan las llamadas incompletas. En el caso del reclamo, una petición como «quiero reclamar» y una opción numérica no reemplazan la descripción del problema.
 
-| Situación | Respuesta y comportamiento esperado | Control que impide actuar sin fundamento |
-|---|---|---|
-| Falta número de pedido | Pedir el número; no elegir uno de la semilla ni adivinarlo. | Campo obligatorio en las herramientas e instrucciones de aclaración. Si el modelo llama sin él, el esquema devuelve error de argumentos. |
-| Falta monto de reembolso | Pedir el monto en pesos; no asumir el total ni una cantidad arbitraria. | `ArgsSolicitarReembolso.monto` es obligatorio, entero positivo y sin valor predeterminado. |
-| Falta motivo del reclamo | Pedir el relato real con `motivo:`; una solicitud genérica y una opción numérica no registran nada. | Pendiente de reclamo sin motivo no se persiste; el relato no se acepta como argumento del LLM. |
-| Pedido mixto sin producto afectado identificable | Preguntar cuál producto fue afectado y no escoger el plazo más conveniente. | Validación contra los productos y categorías reales del pedido. |
-| Pedido inexistente | Comunicar que no está disponible para la sesión, sin inventar estado, productos ni acciones. | Búsqueda conjunta por pedido/cliente devuelve indisponibilidad y no escribe datos. |
-| Pedido de otro cliente | Misma indisponibilidad y ninguna divulgación ni modificación. | Titularidad desde `sesion.cliente_id`; el mensaje del usuario no concede acceso. |
-| Reclamo vencido, pedido no entregado o ya hay uno abierto | Explicar rechazo o informar el reclamo existente, según corresponda. | Estado, plazo y duplicados comprobados antes de preparar y antes de persistir. |
-| Cancelación de enviado/entregado/cancelado o fuera de 24 h | Abstenerse; informar el motivo y la alternativa prevista en la política cuando corresponda. | `_validar_cancelacion`, con estado persistido y reloj simulado. Ayer sin hora confiable no autoriza. |
-| Reembolso sin pedido cancelado ni reclamo abierto, o superior al saldo | Rechazar sin crear devolución, sin recortar monto ni presentar como válida una solicitud que no procede. | `_estado` valida procedencia y saldo con aprobados y solicitudes reservadas. |
-| Reembolso válido sobre el tope | Abstenerse de aprobar autónomamente y tramitar la solicitud confirmada con asesor. | Estado solicitado y escalamiento; el límite no se salta fraccionando reembolsos. |
-| Cambio de dirección, precio o datos personales | Comunicar que el canal no hace esa gestión. | No existen herramientas habilitadas para realizar esas modificaciones. |
+Si el pedido no existe, el agente no inventa su estado ni sus productos. Devuelve que el pedido no está disponible para esa sesión. Se usa la misma respuesta cuando el pedido pertenece a otra persona, para no revelar que existe una compra ajena. La identidad válida siempre sale de la sesión, no de un nombre o permiso escrito en el chat.
 
-**Decisión de privacidad:** inexistente y ajeno producen la misma frase de indisponibilidad. Se reconoce que no se puede recuperar un pedido autorizado y no se inventa información; no se revela al interlocutor si existe una compra ajena. Esta decisión evita que consultar números sirva para enumerar pedidos de otras personas.
+Cuando la política no permite actuar, el código rechaza la operación y el agente debe explicar el motivo. Por ejemplo, no se registra un reclamo vencido, no se cancela un pedido enviado y no se solicita un reembolso sin una condición válida o por encima del saldo disponible. Si ya existe un reclamo abierto, se informa su estado en lugar de crear otro. El canal tampoco tiene herramientas para cambiar direcciones, precios o datos personales.
 
-**Distinción entre instrucciones y garantías:** pedir la aclaración con palabras adecuadas es comportamiento conversacional orientado por `instrucciones.md`. Python garantiza el rechazo de argumentos ausentes/invalidos y de condiciones de negocio prohibidas; no garantiza por sí solo que cada frase generada por el modelo esté bien redactada. La consulta minimizada no devuelve saldo, reclamos u hora verificada: su ausencia en ese resultado no permite afirmar que no existan. Las herramientas financieras consultan esos datos para decidir de forma autorizada.
+Un reembolso válido que supera los $300.000 tiene un tratamiento distinto: no se aprueba automáticamente, pero puede quedar solicitado y pasar a un asesor después de la confirmación del cliente. Esto permite atender el caso sin saltarse el límite de autonomía.
 
-**Evidencia:** escenarios `consulta_incompleta`, `reclamo_motivo_faltante`, `reembolso_monto_faltante`, `pedido_inexistente`, `pedido_ajeno`, `reclamo_vencido`, `cancelacion_rechazada_enviado`, `reembolso_sin_procedencia`, `reembolso_superior_pagado` y `canal_no_modifica_datos`; pruebas en `test_pedidos.py`, `test_reclamos.py`, `test_motivo_explicito.py` y `test_finanzas.py`.
+Las instrucciones ayudan al modelo a pedir los datos y explicar la respuesta, mientras que las herramientas comprueban las reglas antes de escribir. Por eso, aunque el modelo se equivoque al interpretar una solicitud, no puede autorizar una acción que el código rechaza. La calidad de cada explicación también debe revisarse en las respuestas y las trazas.
 
-El evaluador comprueba llamadas y estado final; solo comprueba fragmentos de texto si se configuran. Por eso la evidencia de no ejecución se demuestra con los JSON, mientras que la calidad de las explicaciones también se revisa en respuestas y trazas. La corrida completa documentada obtuvo 150/150 verificaciones satisfactorias y la suite posterior pasó 175 pruebas; no se presenta esto como comprensión semántica universal del modelo.
+Estos casos se cubren en los escenarios de información incompleta, motivo o monto faltante, pedido inexistente, pedido ajeno, reclamo vencido, cancelación de un enviado y reembolso no permitido. Las pruebas revisan además que los datos permanezcan sin cambios cuando corresponde rechazar la acción.
 
-## 5. Resultados y aprendizajes
+## 8. Resultados y aprendizajes
 
 ### Evidencia comprobada
 
