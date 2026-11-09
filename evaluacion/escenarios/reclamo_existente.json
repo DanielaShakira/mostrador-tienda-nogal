@@ -3,22 +3,34 @@
   "descripcion": "C-03 intenta presentar un reclamo sobre P-1007. Se exige registrar_reclamo porque esa herramienta comprueba el registro abierto y devuelve su estado antes de crear; debe conservar R-001 sin duplicados.",
   "cliente": "C-03",
   "turnos": [
-    "Quiero presentar un reclamo por el pedido P-1007. El televisor llegó defectuoso, con la pantalla rota."
+    "motivo:Quiero presentar un reclamo por el pedido P-1007. El televisor llegó defectuoso, con la pantalla rota."
   ],
   "verificaciones": {
-    "herramientas_llamadas": ["registrar_reclamo"],
-    "herramientas_no_llamadas": ["escalar_a_asesor"],
+    "herramientas_llamadas": [
+      "registrar_reclamo"
+    ],
+    "herramientas_no_llamadas": [
+      "escalar_a_asesor"
+    ],
     "argumentos": [
       {
         "herramienta": "registrar_reclamo",
-        "contiene": {"numero_pedido": "P-1007"}
+        "contiene": {
+          "numero_pedido": "P-1007"
+        }
       }
     ],
     "estado_final": [
-      {"archivo": "reclamos", "donde": {}, "cantidad": 2},
       {
         "archivo": "reclamos",
-        "donde": {"numero_pedido": "P-1007"},
+        "donde": {},
+        "cantidad": 2
+      },
+      {
+        "archivo": "reclamos",
+        "donde": {
+          "numero_pedido": "P-1007"
+        },
         "cantidad": 1,
         "esperado": {
           "id": "R-001",
@@ -28,8 +40,16 @@
           "estado": "abierto"
         }
       },
-      {"archivo": "reembolsos", "donde": {}, "cantidad": 0},
-      {"archivo": "escalamientos", "donde": {}, "cantidad": 0}
+      {
+        "archivo": "reembolsos",
+        "donde": {},
+        "cantidad": 0
+      },
+      {
+        "archivo": "escalamientos",
+        "donde": {},
+        "cantidad": 0
+      }
     ]
   }
 }

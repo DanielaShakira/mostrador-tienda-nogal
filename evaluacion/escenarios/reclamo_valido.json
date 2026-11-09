@@ -3,31 +3,52 @@
   "descripcion": "C-01 describe un defecto en P-1002 y después selecciona explícitamente la opción 1 en un turno nuevo. Se verifica la preparación y la persistencia de un único reclamo abierto.",
   "cliente": "C-01",
   "turnos": [
-    "Quiero registrar un reclamo por el pedido P-1002. Los audífonos inalámbricos están defectuosos: el audífono izquierdo no enciende.",
+    "motivo:Quiero registrar un reclamo por el pedido P-1002. Los audífonos inalámbricos están defectuosos: el audífono izquierdo no enciende.",
     "1"
   ],
   "verificaciones": {
-    "herramientas_llamadas": ["registrar_reclamo"],
-    "herramientas_no_llamadas": ["escalar_a_asesor"],
+    "herramientas_llamadas": [
+      "registrar_reclamo"
+    ],
+    "herramientas_no_llamadas": [
+      "escalar_a_asesor"
+    ],
     "argumentos": [
       {
         "herramienta": "registrar_reclamo",
-        "contiene": {"numero_pedido": "P-1002"}
+        "contiene": {
+          "numero_pedido": "P-1002"
+        }
       }
     ],
     "estado_final": [
-      {"archivo": "reclamos", "donde": {}, "cantidad": 3},
       {
         "archivo": "reclamos",
-        "donde": {"numero_pedido": "P-1002", "estado": "abierto"},
+        "donde": {},
+        "cantidad": 3
+      },
+      {
+        "archivo": "reclamos",
+        "donde": {
+          "numero_pedido": "P-1002",
+          "estado": "abierto"
+        },
         "cantidad": 1,
         "esperado": {
           "cliente_id": "C-01",
           "fecha": "2026-11-02"
         }
       },
-      {"archivo": "reembolsos", "donde": {}, "cantidad": 0},
-      {"archivo": "escalamientos", "donde": {}, "cantidad": 0}
+      {
+        "archivo": "reembolsos",
+        "donde": {},
+        "cantidad": 0
+      },
+      {
+        "archivo": "escalamientos",
+        "donde": {},
+        "cantidad": 0
+      }
     ]
   }
 }

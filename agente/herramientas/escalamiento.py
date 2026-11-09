@@ -136,6 +136,7 @@ def escalar_reembolso_superior_al_tope(
     numero_pedido: str,
     monto: int,
     resumen: str,
+    *, acumulado: int | None = None,
 ) -> dict:
     """Registra una solicitud de aprobación humana para un reembolso superior al tope.
 
@@ -146,7 +147,17 @@ def escalar_reembolso_superior_al_tope(
     """
     if isinstance(monto, bool) or not isinstance(monto, int):
         raise ErrorDeHerramienta("El monto del reembolso debe ser un número entero.")
-    if monto <= 300_000:
+    validar_cliente_y_pedido(sesion, numero_pedido)
+    pedido = next(p for p in repositorio.leer_pedidos() if p.numero == numero_pedido and p.cliente_id == sesion.cliente_id)
+    if monto <= 0 or monto > pedido.total:
+        raise ErrorDeHerramienta("El monto no puede superar el total pagado ni ser no positivo.")
+    if acumulado is not None:
+        if type(acumulado) is not int:
+            raise ErrorDeHerramienta("El acumulado debe ser un entero.")
+        aprobado = sum(r.monto for r in repositorio.leer_reembolsos() if r.numero_pedido == numero_pedido and r.estado == "aprobado")
+        if acumulado != aprobado + monto or acumulado > pedido.total:
+            raise ErrorDeHerramienta("El acumulado no coincide con los movimientos reales o supera el total.")
+    if (monto if acumulado is None else acumulado) <= 300_000:
         raise ErrorDeHerramienta(
             "Este escalamiento solo aplica a reembolsos superiores a $300.000."
         )

@@ -1,0 +1,27 @@
+{
+  "nombre": "Reembolso sin cancelación ni reclamo abierto se rechaza",
+  "descripcion": "Reembolso sin cancelación ni reclamo abierto se rechaza. Usa confirmación desde un turno real posterior y datos temporales por repetición.",
+  "cliente": "C-01",
+  "turnos": [
+    "Solicito reembolso de 10000 pesos por P-1002."
+  ],
+  "verificaciones": {
+    "herramientas_llamadas": [
+      "solicitar_reembolso"
+    ],
+    "herramientas_no_llamadas": [],
+    "argumentos": [],
+    "estado_final": [
+      {
+        "archivo": "reembolsos",
+        "donde": {},
+        "cantidad": 0
+      },
+      {
+        "archivo": "escalamientos",
+        "donde": {},
+        "cantidad": 0
+      }
+    ]
+  }
+}

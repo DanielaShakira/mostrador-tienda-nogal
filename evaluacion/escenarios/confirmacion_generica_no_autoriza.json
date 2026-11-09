@@ -1,0 +1,34 @@
+{
+  "nombre": "Un sí genérico no autoriza cancelación",
+  "descripcion": "Un sí genérico no autoriza cancelación. Usa confirmación desde un turno real posterior y datos temporales por repetición.",
+  "cliente": "C-01",
+  "turnos": [
+    "Quiero cancelar P-1001.",
+    "sí"
+  ],
+  "verificaciones": {
+    "herramientas_llamadas": [
+      "cancelar_pedido",
+      "confirmacion_financiera"
+    ],
+    "herramientas_no_llamadas": [],
+    "argumentos": [],
+    "estado_final": [
+      {
+        "archivo": "pedidos",
+        "donde": {
+          "numero": "P-1001"
+        },
+        "cantidad": 1,
+        "esperado": {
+          "estado": "pagado"
+        }
+      },
+      {
+        "archivo": "reembolsos",
+        "donde": {},
+        "cantidad": 0
+      }
+    ]
+  }
+}

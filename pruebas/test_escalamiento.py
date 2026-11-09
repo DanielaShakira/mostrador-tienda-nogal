@@ -249,8 +249,8 @@ def test_funcion_de_reembolso_rechaza_monto_que_no_supera_el_tope():
         match=r"solo aplica a reembolsos superiores a \$300\.000",
     ):
         escalar_reembolso_superior_al_tope(
-            Sesion(cliente_id="C-01"),
-            numero_pedido="P-1002",
+            Sesion(cliente_id="C-02"),
+            numero_pedido="P-1005",
             monto=300_000,
             resumen="No supera el tope de aprobación directa.",
         )

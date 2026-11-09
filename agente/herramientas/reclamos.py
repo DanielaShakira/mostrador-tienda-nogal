@@ -1,6 +1,7 @@
 """Preparación y registro seguro de reclamos con selección explícita."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+import re
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -174,7 +175,29 @@ def _validar_caso(
     )
 
 
+def capturar_motivo(sesion: Sesion, mensaje: str) -> None:
+    """Conserva solo relato explícito del mensaje real, nunca argumentos del LLM."""
+    coincidencia = re.search(r"(?is)\bmotivo:(.*)", mensaje)
+    if coincidencia and coincidencia.group(1).strip():
+        pedidos = re.findall(r"\bP-\d+\b", mensaje, flags=re.I)
+        sesion.relato_reclamo = (sesion.cliente_id, pedidos[0].upper() if len(pedidos) == 1 else None,
+                                coincidencia.group(1), sesion.turnos)
+
+
+def _motivo_cliente(sesion, numero):
+    # Los tests directos y el ciclo usan el mismo origen: mensaje_actual real.
+    capturar_motivo(sesion, sesion.mensaje_actual or "")
+    relato = sesion.relato_reclamo
+    if relato and relato[0] == sesion.cliente_id and relato[1] in {None, numero} and 0 <= sesion.turnos - relato[3] <= 2:
+        return relato[2]
+    return ""
+
+
 def _solicitud_seleccion(pendiente: ReclamoPendiente) -> dict:
+    if not pendiente.motivo.strip():
+        return {"registrado": False, "reclamo_preparado": True, "requiere_aclaracion": True,
+                "numero_pedido": pendiente.numero_pedido, "campo": "motivo",
+                "mensaje": "Antes de registrar, describe qué ocurrió con el producto en un mensaje nuevo que empiece por motivo:. Por ejemplo: motivo: el audífono izquierdo no enciende. Una solicitud de reclamo o una opción numérica no reemplazan esa descripción."}
     return {
         "registrado": False,
         "reclamo_preparado": True,
@@ -210,6 +233,7 @@ def _registrar_validado(
         estado="abierto",
     )
     repositorio.guardar_reclamos([*caso.reclamos, reclamo])
+    sesion.relato_reclamo = None
     return {
         "registrado": True,
         "tipo_motivo": tipo_motivo,
@@ -243,12 +267,7 @@ def registrar_reclamo(sesion: Sesion, args: ArgsRegistrarReclamo) -> dict:
     if isinstance(validado, dict):
         return validado
 
-    motivo = sesion.mensaje_actual
-    if motivo is None or not motivo.strip():
-        return _aclaracion(
-            "motivo",
-            "Describe qué ocurrió con el producto antes de preparar el reclamo.",
-        )
+    motivo = _motivo_cliente(sesion, validado.pedido.numero)
 
     pendiente = ReclamoPendiente(
         numero_pedido=validado.pedido.numero,
@@ -259,6 +278,7 @@ def registrar_reclamo(sesion: Sesion, args: ArgsRegistrarReclamo) -> dict:
         turno_preparacion=sesion.turnos,
     )
     sesion.reclamo_pendiente = pendiente
+    sesion.relato_reclamo = None
     return _solicitud_seleccion(pendiente)
 
 
@@ -287,6 +307,17 @@ def procesar_seleccion_reclamo(sesion: Sesion, mensaje: str) -> dict | None:
             "cancelado": True,
             "mensaje": "Se canceló la preparación del reclamo y no se creó ningún registro.",
         }
+
+    if not pendiente.motivo.strip():
+        coincidencia = re.fullmatch(r"(?is)motivo:(.*)", mensaje)
+        if coincidencia and coincidencia.group(1).strip():
+            sesion.relato_reclamo = None
+            sesion.reclamo_pendiente = replace(pendiente, motivo=coincidencia.group(1), turno_preparacion=sesion.turnos)
+            return _solicitud_seleccion(sesion.reclamo_pendiente)
+        if seleccion.isdecimal() or coincidencia:
+            return _solicitud_seleccion(pendiente)
+        sesion.reclamo_pendiente = None
+        return None
 
     tipo_motivo = SELECCIONES_TIPO.get(seleccion)
     if tipo_motivo is None:

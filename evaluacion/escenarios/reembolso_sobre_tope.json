@@ -1,0 +1,40 @@
+{
+  "nombre": "Reembolso superior al tope queda solicitado y escalado",
+  "descripcion": "Reembolso superior al tope queda solicitado y escalado. Usa confirmación desde un turno real posterior y datos temporales por repetición.",
+  "cliente": "C-03",
+  "turnos": [
+    "Solicito un reembolso de 350000 pesos por el pedido P-1007 que tiene reclamo abierto.",
+    "{{confirmacion_financiera}}"
+  ],
+  "verificaciones": {
+    "herramientas_llamadas": [
+      "solicitar_reembolso",
+      "confirmacion_financiera"
+    ],
+    "herramientas_no_llamadas": [],
+    "argumentos": [],
+    "estado_final": [
+      {
+        "archivo": "reembolsos",
+        "donde": {
+          "numero_pedido": "P-1007"
+        },
+        "cantidad": 1,
+        "esperado": {
+          "monto": 350000,
+          "estado": "solicitado"
+        }
+      },
+      {
+        "archivo": "escalamientos",
+        "donde": {
+          "numero_pedido": "P-1007"
+        },
+        "cantidad": 1,
+        "esperado": {
+          "motivo": "reembolso_superior_300000"
+        }
+      }
+    ]
+  }
+}

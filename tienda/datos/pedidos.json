@@ -12,7 +12,8 @@
         "precio_unitario": 90000
       }
     ],
-    "total": 180000
+    "total": 180000,
+    "medio_pago": "tarjeta_original"
   },
   {
     "numero": "P-1002",
@@ -65,7 +66,7 @@
   {
     "numero": "P-1005",
     "cliente_id": "C-02",
-    "fecha_compra": "2026-11-02",
+    "fecha_compra": "2026-11-01",
     "estado": "en_preparacion",
     "productos": [
       {
@@ -75,7 +76,8 @@
         "precio_unitario": 420000
       }
     ],
-    "total": 420000
+    "total": 420000,
+    "instante_compra": "2026-11-01T12:00:00-05:00"
   },
   {
     "numero": "P-1006",

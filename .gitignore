@@ -1,3 +1,11 @@
 __pycache__/
 .pytest_cache/
 .env
+
+.venv/
+.nogal.lock
+.nogal-transaccion.json
+*.json.tmp
+*.md.tmp
+
+.local/

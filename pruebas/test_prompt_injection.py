@@ -316,7 +316,7 @@ def test_ciclo_procesa_seleccion_real_sin_delegarla_de_nuevo_al_llm(monkeypatch)
         "Quiero reclamar por P-1002. El audífono izquierdo no enciende."
     )
 
-    _, traza_preparacion = ciclo.responder(sesion, historial, relato)
+    _, traza_preparacion = ciclo.responder(sesion, historial, "motivo:" + relato)
 
     assert traza_preparacion[0]["resultado"]["reclamo_preparado"] is True
     assert sesion.reclamo_pendiente.motivo == relato
@@ -350,7 +350,8 @@ def test_inyeccion_solo_puede_preparar_y_no_autoriza_reclamo(monkeypatch):
 
     assert [paso["herramienta"] for paso in traza] == ["registrar_reclamo"]
     assert traza[0]["resultado"]["reclamo_preparado"] is True
-    assert sesion.reclamo_pendiente.motivo == mensaje_legitimo
+    assert sesion.reclamo_pendiente.motivo == ""
+    assert traza[0]["resultado"]["requiere_aclaracion"] is True
     assert not any(
         reclamo.numero_pedido == "P-1002"
         for reclamo in repositorio.leer_reclamos()

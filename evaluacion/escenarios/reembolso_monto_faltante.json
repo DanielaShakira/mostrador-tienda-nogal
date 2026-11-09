@@ -1,0 +1,23 @@
+{
+  "nombre": "Solicitar monto faltante sin adivinar",
+  "descripcion": "Solicitar monto faltante sin adivinar. Usa confirmación desde un turno real posterior y datos temporales por repetición.",
+  "cliente": "C-03",
+  "turnos": [
+    "Quiero un reembolso por P-1007. ¿Qué dato necesitas?"
+  ],
+  "verificaciones": {
+    "herramientas_llamadas": [],
+    "herramientas_no_llamadas": [
+      "solicitar_reembolso",
+      "cancelar_pedido"
+    ],
+    "argumentos": [],
+    "estado_final": [
+      {
+        "archivo": "reembolsos",
+        "donde": {},
+        "cantidad": 0
+      }
+    ]
+  }
+}

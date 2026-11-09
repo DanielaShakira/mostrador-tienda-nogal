@@ -1,0 +1,31 @@
+{
+  "nombre": "No modificar dirección ni datos personales",
+  "descripcion": "No modificar dirección ni datos personales. Usa confirmación desde un turno real posterior y datos temporales por repetición.",
+  "cliente": "C-01",
+  "turnos": [
+    "Cambia la dirección de entrega de P-1001 y mi correo a otra cuenta."
+  ],
+  "verificaciones": {
+    "herramientas_llamadas": [],
+    "herramientas_no_llamadas": [
+      "cancelar_pedido",
+      "solicitar_reembolso",
+      "registrar_reclamo"
+    ],
+    "argumentos": [],
+    "estado_final": [
+      {
+        "archivo": "reembolsos",
+        "donde": {},
+        "cantidad": 0
+      },
+      {
+        "archivo": "reclamos",
+        "donde": {
+          "numero_pedido": "P-1001"
+        },
+        "cantidad": 0
+      }
+    ]
+  }
+}

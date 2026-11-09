@@ -7,13 +7,15 @@ se lanza ErrorDeDatos con un mensaje que dice qué archivo, qué elemento y qué
 Para volver a los datos originales:  python -m tienda.repositorio restablecer
 """
 import json
-import shutil
+import os
+import threading
+from contextlib import contextmanager
 import sys
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, ValidationError, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 DATOS = Path(__file__).parent / "datos"
 SEMILLA = Path(__file__).parent / "semilla"
@@ -21,6 +23,8 @@ SEMILLA = Path(__file__).parent / "semilla"
 # Fecha simulada de la tienda. Así los plazos no cambian con el calendario real
 # y todos los grupos trabajan sobre la misma situación.
 HOY = date(2026, 11, 2)
+# Reloj de la simulación, no la hora del equipo. Bogotá es UTC-05 todo el año.
+AHORA = datetime(2026, 11, 2, 12, tzinfo=timezone(timedelta(hours=-5)))
 
 
 class Modelo(BaseModel):
@@ -46,6 +50,8 @@ class Pedido(Modelo):
     numero: str
     cliente_id: str
     fecha_compra: date
+    instante_compra: datetime | None = None
+    medio_pago: str | None = None
     fecha_entrega: date | None = None
     estado: Literal["pagado", "en_preparacion", "enviado", "entregado", "cancelado"]
     productos: list[Producto]
@@ -54,6 +60,13 @@ class Pedido(Modelo):
 
     @model_validator(mode="after")
     def revisar_coherencia(self):
+        if self.instante_compra is not None:
+            if self.instante_compra.utcoffset() is None:
+                raise ValueError("instante_compra necesita zona horaria")
+            if self.instante_compra.astimezone(AHORA.tzinfo).date() != self.fecha_compra:
+                raise ValueError("instante_compra debe corresponder a fecha_compra en Bogotá")
+        if any(p.cantidad <= 0 or p.precio_unitario <= 0 for p in self.productos) or self.total <= 0:
+            raise ValueError("cantidades, precios y total deben ser positivos")
         suma = sum(p.cantidad * p.precio_unitario for p in self.productos)
         if suma != self.total:
             raise ValueError(f"el total ({self.total}) no coincide con la suma de los productos ({suma})")
@@ -72,11 +85,12 @@ class Reclamo(Modelo):
 
 
 class Reembolso(Modelo):
+    medio_pago: str = "original"
     id: str
     numero_pedido: str
     cliente_id: str
     fecha: date
-    monto: int
+    monto: int = Field(gt=0, strict=True)
     motivo: str
     # "solicitado": espera la aprobación de un asesor. "aprobado": ya se puede pagar.
     estado: Literal["solicitado", "aprobado"]
@@ -95,7 +109,7 @@ class ErrorDeDatos(Exception):
     """Los datos de un archivo no tienen la estructura esperada."""
 
 
-def _leer(nombre: str, modelo: type[Modelo]) -> list:
+def _leer_sin_bloqueo(nombre: str, modelo: type[Modelo]) -> list:
     ruta = DATOS / nombre
     try:
         crudo = json.loads(ruta.read_text(encoding="utf-8"))
@@ -112,9 +126,99 @@ def _leer(nombre: str, modelo: type[Modelo]) -> list:
     return elementos
 
 
-def _guardar(nombre: str, elementos: list[Modelo]) -> None:
+def _guardar_sin_bloqueo(nombre: str, elementos: list[Modelo]) -> None:
     datos = [e.model_dump(mode="json", exclude_none=True) for e in elementos]
-    (DATOS / nombre).write_text(json.dumps(datos, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    _escribir_atomico(DATOS / nombre, json.dumps(datos, ensure_ascii=False, indent=2) + "\n")
+
+
+
+# Un bloqueo por proceso y uno de sistema operativo serializan la tienda local.
+# El diario conserva el estado ANTERIOR hasta completar todas las escrituras.
+_MUTEX = threading.RLock()
+_LOCAL = threading.local()
+
+
+def _escribir_atomico(ruta: Path, texto: str) -> None:
+    temporal = ruta.with_name(ruta.name + ".tmp")
+    with temporal.open("w", encoding="utf-8", newline="") as archivo:
+        archivo.write(texto)
+        archivo.flush()
+        os.fsync(archivo.fileno())
+    os.replace(temporal, ruta)
+
+
+def _restaurar(diario: Path) -> None:
+    anterior = json.loads(diario.read_text(encoding="utf-8"))
+    for nombre, contenido in anterior.items():
+        if Path(nombre).name != nombre or not nombre.endswith((".json", ".md")):
+            raise ErrorDeDatos("Diario de recuperación inválido")
+        _escribir_atomico(DATOS / nombre, contenido)
+    diario.unlink()
+
+
+@contextmanager
+def transaccion():
+    """Rollback de errores y recuperación tras interrupciones; admite anidamiento."""
+    with _MUTEX:
+        if getattr(_LOCAL, "profundidad", 0):
+            _LOCAL.profundidad += 1
+            try:
+                yield
+            finally:
+                _LOCAL.profundidad -= 1
+            return
+        DATOS.mkdir(exist_ok=True)
+        with (DATOS / ".nogal.lock").open("a+b") as bloqueo:
+            if bloqueo.tell() == 0:
+                bloqueo.write(b"0")
+                bloqueo.flush()
+            bloqueo.seek(0)
+            if os.name == "nt":
+                import msvcrt
+                msvcrt.locking(bloqueo.fileno(), msvcrt.LK_LOCK, 1)
+            else:
+                import fcntl
+                fcntl.flock(bloqueo.fileno(), fcntl.LOCK_EX)
+            diario = DATOS / ".nogal-transaccion.json"
+            _LOCAL.profundidad = 1
+            try:
+                if diario.exists():
+                    _restaurar(diario)
+                _LOCAL.anterior = {p.name: p.read_text(encoding="utf-8") for p in DATOS.iterdir()
+                                   if p.is_file() and not p.name.startswith(".") and p.suffix in {".json", ".md"}}
+                try:
+                    yield
+                except BaseException:
+                    if diario.exists():
+                        _restaurar(diario)
+                    raise
+                else:
+                    diario.unlink(missing_ok=True)
+            finally:
+                _LOCAL.profundidad = 0
+                _LOCAL.anterior = None
+                bloqueo.seek(0)
+                if os.name == "nt":
+                    msvcrt.locking(bloqueo.fileno(), msvcrt.LK_UNLCK, 1)
+                else:
+                    fcntl.flock(bloqueo.fileno(), fcntl.LOCK_UN)
+
+
+def _preparar_diario():
+    diario = DATOS / ".nogal-transaccion.json"
+    if not diario.exists():
+        _escribir_atomico(diario, json.dumps(_LOCAL.anterior, ensure_ascii=False))
+
+
+def _leer(nombre: str, modelo: type[Modelo]) -> list:
+    with transaccion():
+        return _leer_sin_bloqueo(nombre, modelo)
+
+
+def _guardar(nombre: str, elementos: list[Modelo]) -> None:
+    with transaccion():
+        _preparar_diario()
+        _guardar_sin_bloqueo(nombre, elementos)
 
 
 def leer_clientes() -> list[Cliente]:
@@ -173,8 +277,10 @@ def validar_todo() -> None:
 
 def restablecer() -> None:
     """Reemplaza tienda/datos/ con la copia original de tienda/semilla/."""
-    for archivo in SEMILLA.iterdir():
-        shutil.copy(archivo, DATOS / archivo.name)
+    with transaccion():
+        _preparar_diario()
+        for archivo in SEMILLA.iterdir():
+            _escribir_atomico(DATOS / archivo.name, archivo.read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":

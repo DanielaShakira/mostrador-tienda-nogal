@@ -1,192 +1,192 @@
-# Análisis del agente
+# Análisis del agente de Tienda Nogal
 
-Grupo:
-Integrantes:
+Grupo: pendiente de dato del grupo.
+Integrantes: pendientes de dato del grupo.
 
-Completa cada sección antes de abrir el pull request. Escribe con tus palabras y sé concreto: es mejor una tabla corta y precisa que una larga y vaga.
+## Alcance y fuentes
 
-Este análisis distingue entre **reglas obligatorias**, tomadas de `tienda/datos/politicas.md` y `GUIA.md`, e **interpretaciones del equipo**, adoptadas donde esas fuentes no definen el mecanismo concreto. El alcance implementado aquí es consulta segura de pedidos, registro de reclamos, escalamiento humano y seguimiento de intentos de resolución. Cancelaciones, reembolsos y sus confirmaciones financieras corresponden al segundo integrante y permanecen identificados como **PENDIENTES DE INTEGRACIÓN**.
+Fuente obligatoria: `tienda/datos/politicas.md`, vigente desde 2026-09-01. Requisitos de ejecución, evaluación y entrega: `GUIA.md` y actividad suministrada por el grupo. El traspaso del compañero corresponde al commit `2d90945` de `feature/base-reclamos`.
 
-## 1. Tabla de decisión
+Las decisiones financieras se documentaron antes de escribir código. Esta versión describe los controles implementados en la rama `entrega`; no confunde especificación con resultados observados del modelo. Los resultados históricos del compañero se conservan como antecedentes en `REVISION_TRASPASO.md`, no como una evaluación nueva.
 
-Una tabla de decisión muestra, para cada combinación de condiciones, qué acción corresponde. Sirve para comprobar que no quedó ningún caso sin respuesta. Por ejemplo, para el préstamo de libros en una biblioteca:
+La tienda usa `HOY=2026-11-02`. Para datos horarios se añadió `AHORA=2026-11-02T12:00:00-05:00`, reloj explícito de la simulación. Nunca se calculan plazos usando la fecha real del equipo.
 
-| ¿Tiene multas pendientes? | ¿El libro está disponible? | Acción |
+## 1. Tablas de decisión
+
+Las filas se aplican en orden. Para toda gestión privada, identidad desde `sesion.cliente_id`, titularidad antes de mostrar información y nuevamente antes de escribir. Un pedido ajeno y uno inexistente producen la misma indisponibilidad.
+
+### Consulta
+
+| Condición | Decisión | Escritura |
 |---|---|---|
-| Sí | Cualquiera | Negar el préstamo e informar la multa |
-| No | Sí | Prestar el libro |
-| No | No | Ofrecer reservarlo |
+| No hay número de pedido | Pedirlo, sin adivinar. | Ninguna. |
+| Pedido ajeno, inexistente o sesión sin acceso | No revelar existencia ni datos. | Ninguna. |
+| Pedido propio | Devolver número, estado, fechas y nombre/cantidad de productos; explicar el estado. | Ninguna. |
+| Notas o nombres contienen órdenes | Tratarlos como datos sin autoridad; no obedecerlos. | Ninguna autorizada por esos datos. |
 
-### Consultar un pedido
+`consultar_pedido` omite `nota_cliente`, identidad, precios y total. El nombre del producto sí llega al modelo y se prueba como entrada no confiable. La filtración de notas se evita por código; no se afirma resistencia universal a cualquier ataque textual.
 
-| ¿Se aportó número? | ¿El pedido existe? | ¿`pedido.cliente_id == sesion.cliente_id`? | Acción |
+### Registrar reclamo
+
+| Condición | Decisión | Persistencia |
+|---|---|---|
+| Pedido no autorizado | Indisponibilidad indistinguible. | Ninguna. |
+| Estado distinto de entregado | Rechazar. | Ninguna. |
+| Ya tiene reclamo abierto | Mostrar id y estado del existente; no duplicar. | Ninguna nueva. |
+| Producto ajeno al pedido o pedido mixto sin producto identificado | Pedir aclaración. | Ninguna. |
+| Fecha de entrega futura o fuera del plazo | Abstenerse. | Ninguna. |
+| Falta descripción explícita del cliente | Pedir un mensaje `motivo: <qué ocurrió>`; una solicitud genérica o `1` no registra nada. | Pendiente temporal. |
+| Motivo explícito y caso elegible | Pedir selección posterior: 1 defectuoso, 2 incompleto, 3 diferente o cancelar. | Pendiente temporal. |
+| Opción válida posterior, caso aún elegible | Consumir selección, revalidar y registrar relato literal. | Un reclamo abierto en `reclamos.json`. |
+| Cancelar, número inválido, cambio de tema o selección en mismo turno | No registrar; el cambio de tema continúa normalmente. | Ninguna. |
+
+Plazos calendario inclusivos desde entrega: perecedero 3 días; ropa/calzado 30; electrónica/electrodomésticos 90; hogar/demás 15. Preferente suma 15 días. Se acepta `0 <= dias <= plazo`; el día siguiente se rechaza. Un reclamo cerrado permite uno nuevo dentro del plazo; el límite es de un abierto por pedido.
+
+El código exige que el cliente declare el motivo con `motivo:` y lo toma del mensaje real, no de argumentos generados por el LLM. Si llega antes del número puede conservarse hasta dos turnos siguientes, vinculado a cliente y pedido si fue indicado. Un motivo sin pedido explícito solo se usa para el siguiente caso que se prepara, se consume y no autoriza otro. Si no hay una descripción estructurada vigente se vuelve a pedir; no se sustituye por el número del pedido.
+
+**Límite semántico:** Python puede garantizar procedencia, presencia y selección explícita, pero no demostrar que una descripción sea verdadera o corresponda materialmente a la causa seleccionada. No se simula esa comprensión con una lista de palabras. La suficiencia narrativa se guía mediante instrucciones y la defensa debe reconocer este límite.
+
+### Cancelar pedido
+
+| Condición | Decisión | Persistencia |
+|---|---|---|
+| Falta número o pedido no autorizado | Pedir dato o devolver indisponibilidad. | Ninguna. |
+| Compra futura o datos incoherentes | Rechazar; no inventar hora. | Ninguna. |
+| Enviado | No cancelar; explicar rechazo en puerta o reclamo tras recepción. | Ninguna. |
+| Entregado o cancelado | No aplica; no repetir devolución. | Ninguna. |
+| Pagado | Elegible sin límite de antigüedad, salvo compra futura. | Solo preparación. |
+| En preparación con hora verificada, de 0 a 24 h inclusive | Elegible. | Solo preparación. |
+| En preparación con hora verificada, más de 24 h | Rechazar. | Ninguna. |
+| En preparación sin hora y compra de hoy | Elegible: dentro del mismo día la antigüedad es menor de 24 h. | Solo preparación. |
+| En preparación sin hora, compra de ayer | No se puede verificar el límite: abstenerse hasta contar con dato confiable. | Ninguna. |
+| En preparación sin hora, compra de hace dos o más días | Fuera de plazo. | Ninguna. |
+| Tiene devoluciones previas o total incompatible | No duplicar el total ni hacer cancelación parcial. | Ninguna nueva. |
+| Preparado, sin confirmación exacta posterior | No actuar. | Solo sesión. |
+| Confirmado y total hasta $300.000 | Cancelar y crear devolución automática aprobada del total. | `pedidos.json` y `reembolsos.json`. |
+| Confirmado y total mayor de $300.000 | Cancelar, solicitar devolución automática del total y escalar aprobación. | Pedido cancelado; reembolso solicitado; escalamiento con resumen. |
+| Cambiaron condiciones o falla escritura | No informar éxito; consumir autorización y restaurar datos anteriores. | Rollback o recuperación del diario. |
+
+Una sola autorización informa cancelación y devolución automática del total. El tope humano sigue aplicando aunque el trámite sea automático: por encima de $300.000 se solicita la devolución, no se aprueba ni se paga autónomamente.
+
+### Solicitar reembolso
+
+Se define A = suma de aprobados del pedido; S = suma de solicitudes pendientes. Saldo disponible = total pagado - A - S. Las solicitudes reservan saldo y evitan duplicados. Pesos COP enteros positivos; se rechazan booleanos, fracciones, texto numérico, cero y negativos en argumentos financieros.
+
+| Condición | Decisión | Persistencia |
+|---|---|---|
+| Falta número o monto | Pedirlo; no adivinar. | Ninguna. |
+| Pedido no autorizado | Indisponibilidad indistinguible. | Ninguna. |
+| No cancelado y sin reclamo abierto propio | Rechazar; reclamo cerrado no habilita. | Ninguna. |
+| Monto inválido o A + S + monto > total | Rechazar sin recortar ni escalar una solicitud inválida. | Ninguna. |
+| Ya hay solicitud pendiente | Informar que existe trámite; no duplicar. | Ninguna nueva. |
+| Procedente, con saldo y sin confirmación posterior | Mostrar acción, pedido, monto y consecuencias. | Pendiente inmutable. |
+| Confirmación válida y A + monto <= $300.000 | Revalidar y aprobar el monto confirmado. | `reembolsos.json`. |
+| Confirmación válida y A + monto > $300.000 | Solicitar y escalar; nunca aprobar. | Reembolso solicitado y escalamiento. |
+| Código falso, otro cliente, otro pedido, reutilización o cambio de condiciones | No actuar; nueva preparación si corresponde. | Ninguna nueva. |
+
+El control por pedido es acumulado: $200.000 aprobados más $150.000 nuevos requieren asesor. No se puede eludir dividiendo solicitudes. El helper interno de escalamiento verifica el acumulado contra movimientos persistidos; no confía en un total declarado por el modelo.
+
+### Escalar
+
+| Condición | Decisión | Evidencia |
+|---|---|---|
+| Cliente pide asesor explícitamente | Escalar. | Causal `solicitud_asesor`, resumen y cliente de sesión. |
+| Reporta cobro no reconocido o posible fraude | Escalar sin movimientos financieros. | Causal correspondiente y resumen. |
+| Primer o segundo fallo confirmado del mismo caso | Continuar atención. | Contador en `CasoSoporte`. |
+| Tercer fallo confirmado | Escalamiento interno automático. | `tres_intentos_sin_resolver` y caso/contador en Python. |
+| Cliente informa resuelto | Cerrar seguimiento sin escalar. | Estado de caso en sesión. |
+| Reembolso válido que excede acumulado autónomo | Escalar para aprobación; no presentar como pago. | `reembolso_superior_300000`. |
+| Mismo caso ya escalado | Reutilizar id cuando coincide clave de deduplicación. | Sin duplicado. |
+| Sin causal habilitada | No escalar automáticamente. | Ninguna escritura. |
+
+Siempre se exige resumen no vacío y se informa contacto en máximo un día hábil. No se inventa una fecha exacta sin calendario laboral. Causales conversacionales son interpretadas por el modelo; Python limita las causales y garantiza titularidad y persistencia, no comprensión universal del lenguaje.
+
+## 2. Ambigüedades y decisiones
+
+| Texto o vacío | Alternativas consideradas | Decisión y razón |
+|---|---|---|
+| Plazo por producto en pedido mixto | Menor, mayor o producto afectado | Pedir producto afectado y usar su categoría real. |
+| Desde entrega, en días | Incluir o excluir último día | Inclusivo; futuro rechazado. Evita quitar un día sin base textual. |
+| Motivo descrito por cliente | Cualquier mensaje, resumen del modelo o declaración real | Mensaje real explícito `motivo:`, conservado sin reescritura y selección posterior. No confundir solicitud con motivo. |
+| Pedido ajeno | Revelar que existe o indisponibilidad común | Misma respuesta que inexistente para evitar enumeración. |
+| 24 horas, datos solo date | Asumir medianoche o admitir incertidumbre | Se añadió instante opcional con zona y reloj simulado. Datos antiguos de ayer sin hora no autorizan. |
+| Cancelar devuelve total, pero sobre $300.000 requiere asesor | Excepción financiera o solicitud automática | Cancelar y solicitar total, aprobado solo bajo tope; alto queda pendiente del asesor. |
+| Hasta $300.000 por pedido | Por solicitud o acumulado | Acumulado aprobado, con reservas de solicitudes para controlar saldo. Evita fraccionamiento. |
+| No exceder pagado | Cada registro o suma | Validar suma y saldo, no cada movimiento aislado. |
+| Parciales no se prohíben | Solo total o parciales | Admitir parciales explícitos en solicitudes; cancelación nueva siempre devuelve total. |
+| Confirmación explícita | Booleano del LLM, sí libre o protocolo real | Desafío aleatorio Python vinculado a acción/pedido/monto/cliente; turno posterior y consumo único. |
+| Confirmación para cancelación y reembolso automático | Dos preguntas o autorización conjunta | Una pregunta con ambas consecuencias, evitando bucles sin perder consentimiento. |
+| Mismo medio de pago | Inventar transacción real o registrar destino original | Reembolso guarda medio original, copiado de pedido si existe o marcador `original`. No se ejecutan pagos bancarios. |
+| Tres intentos | Mensajes, herramientas o fallos confirmados | Solo resultado exacto `sigue sin resolver` posterior a solución preparada del mismo caso. |
+| Mismo problema y reinicios | Agrupar solo por pedido o caso | UUID de caso y `nuevo caso` explícito; estado en memoria se pierde al reiniciar. |
+| Un día hábil | Fecha exacta o plazo literal | Plazo literal porque no hay calendario laboral. |
+| Concurrencia y múltiples JSON | Escrituras independientes o transacción | Bloqueo de sistema operativo, diario previo, reemplazo atómico y rollback. Evita cancelación sin registro financiero ante fallo. |
+| Evaluación de códigos aleatorios | Código fijo o turno dinámico | `{{confirmacion_financiera}}` se sustituye por el código preparado al simular al cliente; pasa por el mismo ciclo y controles. |
+
+## 3. Clasificación por riesgo
+
+| Herramienta/acción | Riesgo | Reversibilidad | Control |
 |---|---|---|---|
-| No | No evaluable | No evaluable | Pedir el número; no llamar `consultar_pedido`. |
-| Sí | Sí | Sí | Devolver solo número, estado, fechas y nombre/cantidad de productos. |
-| Sí | Sí | No | No revelar ningún dato ni confirmar que existe; devolver pedido no disponible. |
-| Sí | No | No aplica | Devolver la misma indisponibilidad usada para un pedido ajeno. |
-
-**Regla obligatoria:** antes de informar o gestionar un pedido se comprueba que pertenece al cliente atendido y nunca se comparten datos de otros clientes (`tienda/datos/politicas.md`, preámbulo). La identidad procede exclusivamente de `sesion.cliente_id`; no es argumento de la herramienta y no puede sustituirse por un identificador escrito por el usuario o generado por el LLM (`GUIA.md`, sección sobre sesión iniciada).
-
-**Decisiones de privacidad y minimización:** pedido ajeno e inexistente tienen una respuesta indistinguible. `nota_cliente`, precios, total e identidad no se devuelven porque no son necesarios para explicar el estado. Los nombres de productos sí se devuelven como datos no confiables; las instrucciones del agente prohíben atribuirles autoridad.
-
-### Cancelar un pedido
-
-**PENDIENTE DE INTEGRACIÓN con el segundo integrante.** Debe completar esta tabla con `tienda/datos/politicas.md`, sección **Cancelaciones**, incluida la confirmación explícita, la ventana de 24 horas, el cambio de estado y el reembolso automático. La confirmación no debe implementarse como un interceptor independiente: debe ser un nuevo tipo de `OperacionPendiente` administrado por el enrutador central.
-
-### Registrar un reclamo
-
-Primero se aplica la autorización de consulta. Si el pedido no está disponible para `sesion.cliente_id`, no se revela si existe y no se prepara ni registra nada.
-
-| ¿Pedido autorizado? | ¿Entregado? | ¿Reclamo abierto? | ¿Producto identificable? | ¿Fecha/plazo válidos? | Acción |
-|---|---|---|---|---|---|
-| No | Cualquiera | Cualquiera | Cualquiera | Cualquiera | Misma indisponibilidad que para pedido inexistente; no escribir. |
-| Sí | No | Cualquiera | Cualquiera | Cualquiera | Rechazar: la política solo permite reclamar pedidos entregados. |
-| Sí | Sí | Sí | Cualquiera | Cualquiera | Devolver identificador y estado del reclamo abierto; no duplicar. |
-| Sí | Sí | No | No, y hay categorías distintas | No evaluable | Pedir el producto concreto; no calcular un plazo arbitrario. |
-| Sí | Sí | No | Producto inexistente en el pedido | No evaluable | Pedir aclaración; no escribir. |
-| Sí | Sí | No | Sí | Entrega futura | Rechazar el intervalo inválido; no escribir. |
-| Sí | Sí | No | Sí | Fuera del plazo | Rechazar; no crear estado pendiente. |
-| Sí | Sí | No | Sí | Dentro del plazo, incluido el último día | Guardar un `ReclamoPendiente`; todavía no escribir `reclamos.json`. |
-
-El plazo se cuenta en días calendario desde la entrega: perecederos 3 días, ropa y calzado 30, electrónica y electrodomésticos 90, hogar y demás 15; los clientes preferentes reciben 15 días adicionales (`politicas.md`, **Reclamos**). **Interpretación implementada:** el último día es inclusivo, de modo que se acepta cuando `0 <= repositorio.HOY - fecha_entrega <= plazo_aplicable`.
-
-#### Contrato conversacional del reclamo
-
-1. `registrar_reclamo` recibe solo `numero_pedido` y, cuando corresponde, `producto`; Pydantic prohíbe campos adicionales.
-2. El relato se toma de `sesion.mensaje_actual`, es decir, del turno real del cliente. La preparación valida titularidad, estado, producto, categoría, plazo y duplicados, y crea un `ReclamoPendiente` inmutable sin escribir.
-3. La herramienta pide una respuesta en un turno posterior: `1` defectuoso, `2` incompleto, `3` diferente al comprado o `cancelar`.
-4. `procesar_operacion_pendiente` entrega la respuesta al protocolo de reclamo antes del LLM. No se aceptan `tipo_motivo`, `confirmado` ni una confirmación generada por el modelo.
-5. Una opción válida consume el pendiente antes de revalidar titularidad, entrega, producto, plazo y reclamo abierto; después realiza una sola escritura. Una autorización consumida no puede reutilizarse.
-6. `cancelar` y las selecciones numéricas inválidas no escriben. Una nueva solicitud sustantiva descarta el reclamo pendiente y continúa hacia el flujo normal del agente, evitando bloquear consultas o escalamientos urgentes.
-
-**Limitación semántica:** Python garantiza que la categoría fue elegida por el cliente en un turno posterior, pero no demuestra que esa elección describa materialmente el relato. Por ejemplo, no puede determinar por texto libre si una historia corresponde de verdad a “defectuoso”. La selección explícita resuelve la autoridad de la decisión, no la veracidad del hecho.
-
-El modelo persistente `Reclamo` no contiene `producto` ni `tipo_motivo`. El producto se usa para validar categoría y plazo; la selección se devuelve en el resultado inmediato, pero ninguno de los dos queda como campo separado en `reclamos.json`. Sí se persiste literalmente el relato original del cliente como `motivo`.
-
-### Solicitar un reembolso
-
-**PENDIENTE DE INTEGRACIÓN con el segundo integrante.** Debe implementar procedencia, límite respecto al total, estados y confirmación explícita conforme a `politicas.md`, **Reembolsos**. Para montos superiores a $300.000 debe reutilizar `escalar_reembolso_superior_al_tope(sesion, numero_pedido, monto, resumen)`, que no es herramienta del LLM, revalida titularidad y umbral, y no aprueba ni ejecuta el reembolso.
-
-### Escalar a una persona
-
-| Condición verificada | ¿Se escala? | Acción |
-|---|---|---|
-| El cliente pide una persona | Sí | El LLM llama `escalar_a_asesor` con causal `solicitud_asesor`; Python valida sesión/pedido, exige resumen y persiste. |
-| El cliente reporta cobro no reconocido | Sí | Escalar con causal `cobro_no_reconocido`, sin ejecutar cambios financieros. |
-| El cliente reporta posible fraude | Sí | Escalar con causal `posible_fraude`, sin ejecutar cambios financieros. |
-| Se confirma el primer o segundo intento fallido del mismo caso | No todavía | Incrementar en Python el contador de `CasoSoporte`; continuar activo. |
-| Se confirma el tercer intento fallido | Sí, automático | Python llama `escalar_por_tres_intentos`; el LLM no puede invocar esta función ni aportar el contador. |
-| El cliente responde `resuelto` al intento pendiente | No | Marcar el caso resuelto y no escalar. |
-| Reembolso superior a $300.000 validado por el módulo financiero | Sí | Usar el contrato interno compartido; no presentarlo como aprobación. |
-| Ya existe escalamiento del mismo caso | No crear otro | Reutilizar el identificador existente y el mismo plazo. |
-| Ninguna condición anterior | No automático | Continuar la atención normal. |
-
-La política exige literalmente escalar cuando el problema no se resolvió después de tres intentos, pero no define “intento”, identidad del problema, reinicio o evidencia del fallo (`politicas.md`, **Escalamiento**). El equipo adoptó estas decisiones:
-
-- `preparar_intento_resolucion` registra una solución concreta y crea `ResultadoIntentoPendiente`, pero no incrementa ni escribe.
-- `CasoSoporte` contiene `caso_id` UUID generado en Python, cliente de sesión, pedido opcional, relato inicial, contador, estado y `escalamiento_id`.
-- Solo la respuesta exacta `sigue sin resolver` en un turno posterior incrementa una vez. Mensajes, consultas, preguntas, llamadas, errores e iteraciones del LLM no cuentan.
-- `resuelto` cierra el caso; `cancelar seguimiento` descarta el resultado pendiente sin contar; otra solicitud descarta ese resultado y continúa normalmente.
-- `nuevo caso` es la transición explícita que abandona el caso activo. Dos problemas del mismo pedido no deben compartir contador.
-- El tercer fallo activa directamente `escalar_por_tres_intentos(sesion)`, causal interna `tres_intentos_sin_resolver`, resumen canónico con `caso_id` y contacto en máximo un día hábil.
-- El estado `escalado` y el `escalamiento_id` evitan un cuarto registro durante la sesión. La deduplicación persistente también compara cliente, pedido, causal y resumen normalizado.
-
-En los escalamientos públicos, Python limita las causales posibles, pero la correspondencia entre el relato y `solicitud_asesor`, `cobro_no_reconocido` o `posible_fraude` depende de la interpretación del LLM. Es una limitación conocida; la herramienta sí garantiza identidad, titularidad, resumen no vacío y campos persistidos.
-
-### Enrutador central de operaciones pendientes
-
-`Sesion.operacion_pendiente` es una unión de tipos: actualmente puede contener `ReclamoPendiente` o `ResultadoIntentoPendiente`, y `agente/pendientes.py` distingue el protocolo activo por el tipo concreto. Ese enrutador es el único punto ejecutado antes del LLM para procesar pendientes. Solo puede existir una operación pendiente por sesión.
-
-Una respuesta exacta del protocolo se procesa en Python; una nueva solicitud sustantiva libera el pendiente y conserva el mensaje original para el agente. Este comportamiento corrigió el bloqueo por el cual un cobro desconocido podía consumirse como selección inválida de reclamo.
-
-**Contrato para el segundo integrante:** las confirmaciones financieras deben añadirse como nuevos tipos de `OperacionPendiente`, con parámetros inmutables, turno de preparación y consumo único. No deben crearse campos pendientes o interceptores paralelos, ni reutilizar `1`, `cancelar` u otra respuesta sin discriminar primero el tipo activo. Debe mantenerse la regla de que una solicitud nueva no quede bloqueada por un protocolo anterior.
-
-## 2. Ambigüedades y decisión tomada
-
-| Qué dice la política | Interpretaciones posibles | Decisión y razón |
-|---|---|---|
-| El plazo depende del producto. | Usar el menor, mayor o el del producto afectado en pedidos mixtos. | Pedir el producto concreto y usar su categoría. No se inventa ni persiste un producto que el modelo `Reclamo` no admite. |
-| El plazo se cuenta desde la entrega. | Incluir o excluir el último día. | Admitir `dias_transcurridos <= plazo`; rechazar fechas futuras. |
-| Cada pedido admite un reclamo abierto. | Revalidar y crear otro, o devolver el existente. | Devolver identificador/estado del abierto y no escribir. |
-| El reclamo debe corresponder a defectuoso, incompleto o diferente. | Confiar en clasificación del LLM, usar palabras clave o pedir decisión al cliente. | Preparar sin escribir y obtener `1`, `2` o `3` del turno posterior real. No se afirma que Python comprenda semánticamente el relato. |
-| Si falta motivo, debe pedirse. | Aceptar cualquier texto, clasificarlo o pedir detalles. | Exigir relato no vacío del turno real. La suficiencia semántica sigue siendo conversacional; el código no inventa ni reescribe. |
-| Nunca compartir pedidos ajenos. | Informar que existe pero es ajeno, o no distinguir. | Usar la misma indisponibilidad para ajeno e inexistente. |
-| El problema no resuelto después de tres intentos se escala. | Contar mensajes, llamadas, turnos, propuestas o fallos confirmados. | Contar solo `sigue sin resolver` asociado a un `ResultadoIntentoPendiente` del mismo `caso_id`. Preparar no cuenta. |
-| La política no define “mismo problema”. | Usar pedido, texto libre o caso estructurado. | Usar UUID de `CasoSoporte`; el pedido es solo un ancla. `nuevo caso` separa explícitamente problemas, incluso en el mismo pedido. |
-| El seguimiento podría sobrevivir reinicios. | Reconstruir desde historial, persistir o limitar a sesión. | Estado solo en memoria. Tras reinicio no se inventan intentos; persistirlos requeriría un modelo nuevo. |
-| La política no regula escalamientos repetidos. | Crear siempre, deduplicar por texto o usar clave de caso. | Para tres intentos se usa `caso_id`, estado e identificador en sesión; para causales públicas, coincidencia conservadora de cliente, pedido, causal y resumen normalizado. |
-| El asesor contacta en máximo un día hábil. | Calcular fecha exacta o comunicar el plazo. | Comunicar el plazo literal; no existe calendario laboral para justificar una fecha. |
-| Las operaciones financieras requieren confirmación. | Interceptores separados o protocolo central. | **PENDIENTE DE INTEGRACIÓN:** extender `OperacionPendiente`, sin interceptores incompatibles. |
-
-## 3. Clasificación de acciones por riesgo
-
-| Herramienta/acción | Tipo | Riesgo | ¿Se puede deshacer? | Control aplicado |
-|---|---|---|---|---|
-| `consultar_politica` | Lectura pública | Bajo | No aplica | Tema limitado; no accede a identidad ni escribe. |
-| `consultar_pedido` | Lectura privada | Medio | Una divulgación no se puede retirar | Titularidad por `sesion.cliente_id`, respuesta indistinguible, minimización y filtrado de `nota_cliente`. |
-| Preparar reclamo | Estado temporal | Bajo | Sí, cancelar/descartar | Todas las reglas se validan antes; no escribe y requiere selección posterior. |
-| Registrar reclamo | Escritura | Medio | No directamente; solo abierto/cerrado | Selección real, consumo único, revalidación completa y prevención de duplicados. |
-| `preparar_intento_resolucion` | Estado temporal | Bajo | Sí | No incrementa ni escala; prohíbe identidad, contador, caso y resultado como argumentos. |
-| Escalar por tres fallos | Escritura | Medio | No hay cierre persistente | Contador y caso en sesión, función interna no expuesta al LLM, causal/resumen canónicos y deduplicación. |
-| `escalar_a_asesor` por solicitud | Escritura | Medio | No hay cierre persistente | Causal limitada, cliente/pedido validados, resumen obligatorio y deduplicación conservadora. |
-| Escalar fraude o cobro desconocido | Escritura sensible | Alto | No plenamente | No ejecuta movimientos financieros; valida sesión y registra resumen mínimo. La causal depende de interpretación conversacional. |
-| `escalar_reembolso_superior_al_tope` | Operación compartida sensible | Alto | El escalamiento se revisa; un pago no | Función interna, umbral y titularidad revalidados; no aprueba ni paga. Integración financiera pendiente. |
-| Cancelar, reembolsar y confirmar | Escritura sensible | Alto | Depende de la acción | **PENDIENTE DE INTEGRACIÓN** con el segundo integrante. |
+| Consultar política | Bajo | No aplica | Tema enumerado; no datos privados. |
+| Consultar pedido | Medio | Divulgación irreversible | Identidad de sesión, titularidad y minimización. |
+| Preparar reclamo | Bajo | Descartable | Sin escritura, relato real y protocolo posterior. |
+| Registrar reclamo | Medio | No hay cierre automático por este canal | Plazo/estado/duplicado revalidados y selección consumida. |
+| Preparar solución | Bajo | Descartable | No suma intentos ni escala. |
+| Escalar asesor/fraude | Medio/alto por sensibilidad | No hay cierre persistente | Resumen, causal limitada, titularidad y deduplicación. |
+| Confirmar tercer fallo | Medio | Estado de sesión | Fallo real posterior, caso propio y helper interno. |
+| Preparar finanzas | Bajo hasta ejecución | Descartable | Datos inmutables y desafío sin escritura. |
+| Cancelar y devolver | Alto | Sin reversión por herramienta | Confirmación posterior conjunta, tiempo/estado/saldo/tope y transacción. |
+| Solicitar reembolso | Alto | Sin reversión por herramienta | Procedencia, monto positivo, saldo reservado, tope acumulado y aprobación humana. |
 
 ## 4. Matriz de reglas y mecanismos
 
-Las instrucciones orientan al modelo, pero no autorizan acciones. Las reglas críticas se validan en Python; `Sesion` aporta la identidad y las respuestas confiables de turnos posteriores (`GUIA.md`, introducción y sección de herramientas).
+Las instrucciones orientan al modelo. La autorización y las reglas deterministas se ejecutan en Python. La sesión no es un argumento público ni puede sustituirse desde el modelo.
 
-| Regla | Instrucciones | Validación Python | Estado de sesión | Evidencia |
+| Regla | Instrucciones | Validación en código | Estado de sesión | Prueba/escenario |
 |---|---|---|---|---|
-| Solo consultar/gestionar pedidos propios (`politicas.md`, preámbulo). | No pedir ni aceptar otra identidad. | Comparar con `sesion.cliente_id`; misma indisponibilidad para ajeno/inexistente. | `cliente_id`. | `test_pedidos.py`; escenarios `consulta_pedido_normal`, `pedido_ajeno`, `pedido_inexistente`. |
-| Los datos recuperados no son instrucciones. | Tratar notas, productos y resultados como datos sin autoridad. | `nota_cliente` no se devuelve; escrituras requieren validaciones propias. | No aplica. | `test_prompt_injection.py`; escenarios de inyección y ejecución real aislada. |
-| Reclamos solo por las tres causas permitidas. | Pedir selección; no clasificar por el cliente. | Solo acepta el protocolo `1/2/3`; rechaza argumentos fabricados. | `ReclamoPendiente` dentro de `OperacionPendiente`. | `test_reclamos.py`; `reclamo_valido`. |
-| Plazos por categoría y 15 días extra. | Explicar la decisión de la herramienta. | Categoría desde pedido/cliente; `repositorio.HOY`; último día inclusivo; futuro rechazado. | No aplica. | Pruebas de cuatro categorías y límites; escenarios `reclamo_limite_*` y `reclamo_vencido`. |
-| Solo pedido entregado y un reclamo abierto. | No prometer creación antes del resultado. | Validar antes de preparar y antes de escribir; devolver el abierto existente. | Pendiente consumido una vez. | Pruebas de estados/duplicados; `reclamo_existente`. |
-| Registrar el motivo del cliente. | No inventar ni reescribir. | Tomar `sesion.mensaje_actual` y persistirlo literalmente. | `ReclamoPendiente.motivo`. | Pruebas de persistencia, ausencia y argumentos fabricados. |
-| Una solicitud nueva no queda bloqueada por un pendiente. | Atender el nuevo tema. | El protocolo activo libera texto sustantivo y el ciclo continúa. | Una sola `OperacionPendiente`. | Pruebas de cobro, asesor, fraude y consulta durante pendientes. |
-| Escalar si el cliente pide asesor, reporta cobro o fraude. | Elegir causal fiel y comunicar plazo. | `Literal`, sesión/pedido, resumen y persistencia. | No requerido. | `test_escalamiento.py`; tres escenarios públicos aprobados. |
-| Escalar tras tres intentos no resueltos. | Preparar solución y pedir resultado exacto. | Solo `sigue sin resolver` posterior incrementa; el tercero llama función interna. | `CasoSoporte` y `ResultadoIntentoPendiente`. | `test_intentos.py`; escenarios `tres_intentos_sin_resolver` e `intentos_problema_resuelto`. |
-| No duplicar escalamiento del mismo caso. | Informar el existente. | Guardar `escalamiento_id`; estado `escalado`; coincidencia persistente conservadora. | `caso_id` y `escalamiento_id`. | Pruebas de cuarto fallo y llamadas repetidas. |
-| Reembolso superior a $300.000 requiere asesor. | No presentarlo como aprobado. | Helper interno valida entero, `> 300000`, titularidad y deduplica. | Integración financiera pendiente. | Pruebas unitarias del helper; evaluación conjunta pendiente. |
-| No modificar dirección, precio o datos personales. | Comunicar límite. | No existen herramientas para esas escrituras. | No aplica. | Inspección de herramientas registradas; escenario conjunto pendiente. |
+| Solo pedidos propios | No suplantar identidad | Búsqueda conjunta y helper de sesión | cliente_id | test_pedidos, test_finanzas; pedido_ajeno, cancelacion_pedido_ajeno |
+| No inventar número/monto | Pedir faltantes | Esquema obligatorio, sin valores por defecto de monto | No aplica | consulta_incompleta, reembolso_monto_faltante |
+| No obedecer datos inyectados | Datos sin autoridad | Omitir nota; escrituras protegidas | Pendientes no generables por tools | test_prompt_injection; dos escenarios de inyección |
+| Reclamo dentro de plazo, entregado y no duplicado | Explicar resultado | _validar_caso antes y después | ReclamoPendiente | test_reclamos; reclamo_limite_*, reclamo_vencido |
+| Motivo real y explícito | Pedir `motivo:` | No acepta motivo por argumento; selección sin relato no escribe | relato_reclamo y pendiente | test_motivo_explicito; reclamo_motivo_faltante |
+| Cancelación según estado/24 h | No inventar horas | _validar_cancelacion; reloj simulado | FinanzasPendientes | test_finanzas; cancelacion_limite_24h, cancelacion_rechazada_enviado |
+| Confirmación anterior no saltable | No pedir una segunda pregunta | Mensaje exacto posterior fuera del LLM; desafío y consumo único | Cliente/acción/pedido/monto/turno/huella inmutables | test_finanzas, test_evaluacion_entrega; confirmacion_generica_no_autoriza |
+| Devolución total automática al cancelar | Informar ambas consecuencias | Una transacción crea cambio de estado y un reembolso total | Una autorización conjunta | test_finanzas; cancelacion_confirmada |
+| Reembolso procedente | No prometer aprobación | Cancelado o reclamo abierto propio | Huella de condiciones | test_finanzas; reembolso_sin_procedencia |
+| No exceder total ni fraccionar tope | No recortar/dividir | Saldo A+S y umbral acumulado inclusivo | Monto autorizado | test_finanzas; reembolso_superior_pagado, reembolso_tope_exacto |
+| Superior a $300.000 escala | No llamarlo aprobado | Solicitud, helper interno y resumen | Preparación informa revisión | test_finanzas; reembolso_sobre_tope |
+| Escalar tercer fallo | No contar mensajes | Resultado posterior real y contador Python | CasoSoporte y ResultadoIntentoPendiente | test_intentos; tres_intentos_sin_resolver |
+| Trazabilidad/consistencia | Confirmar solo persistencia | JSON, bloqueo, diario, rollback y recuperación | Autorización consumida | test_finanzas y test_evaluacion_entrega: fallos de escritura y ciclo |
+| No direcciones/precios/datos personales | Comunicar límite | No hay herramientas habilitadas para cambios | No aplica | canal_no_modifica_datos |
+| Evaluación reproducible sin borrar trabajo | No aplica | DATOS temporal por repetición y captura de trazas | Sesión nueva por corrida | test_evaluacion_entrega |
 
-### Acuerdos de integración pendientes
+### Cambios al modelo base justificados
 
-- **Cancelación:** tabla definitiva, ventana de 24 horas, transición del pedido y reembolso automático.
-- **Reembolso:** procedencia, límite respecto al total, estados y relación con cancelaciones/reclamos.
-- **Confirmaciones financieras:** nuevos tipos de `OperacionPendiente`, vinculados a acción, pedido y monto, con turno posterior, consumo único y descarte seguro ante solicitudes nuevas.
-- **Reembolso alto:** el segundo integrante debe llamar una sola vez `escalar_reembolso_superior_al_tope`; no debe duplicar la escritura ni presentarla como aprobación.
-- **Evaluación final conjunta:** escenarios cruzados de cancelación-reembolso-escalamiento, coexistencia con reclamos/intentos y regresión completa.
-- **Escalamiento activo:** `Escalamiento` no tiene estado persistente. Debe acordarse si la deduplicación conservadora es suficiente o si un cambio de modelo pertenece a una fase posterior.
+`Pedido.instante_compra` es opcional y debe tener huso horario y fecha coherente con `fecha_compra` en Bogotá; permite el límite exacto sin romper pedidos antiguos. `Pedido.medio_pago` es opcional y solo lo aporta la fuente de datos, nunca la herramienta del modelo. `Reembolso.medio_pago` conserva el destino original; `monto` persistido exige entero positivo. En la semilla P-1005 representa exactamente 24 horas, y P-1001 tiene medio de pago simulado. No se afirma integración con una pasarela.
+
+La persistencia se amplió porque cancelar implica varias escrituras: bloqueo entre hilos/procesos y diario del estado anterior. Si una escritura falla se restaura; si se interrumpe el proceso, la siguiente lectura recupera el diario antes de exponer datos. La operación no se informa como exitosa antes de terminar. Este mecanismo está pensado para los archivos de una tienda local; no reemplaza una base de datos ni garantiza comportamiento ante daño físico del disco.
 
 ## 5. Resultados y aprendizajes
 
-### Evidencia observada
+### Evidencia comprobada
 
-- La última suite completa registrada ejecutó **103 pruebas unitarias y todas aprobaron**. Incluye consulta, reclamos, escalamiento, intentos, enrutamiento y pruebas deterministas de prompt injection.
-- Los cuatro escenarios iniciales de consulta de pedidos (`consulta_pedido_normal`, `consulta_incompleta`, `pedido_inexistente`, `pedido_ajeno`) tienen una ejecución satisfactoria cada uno.
-- Los tres escenarios públicos de escalamiento (`escalamiento_asesor`, `cobro_desconocido`, `posible_fraude`) tienen una ejecución satisfactoria cada uno.
-- Tras adoptar el contrato de reclamo en dos turnos, se reevaluaron satisfactoriamente, una vez cada uno, cinco escenarios: `reclamo_valido`, `reclamo_vencido`, `reclamo_existente`, `reclamo_limite_hogar_regular` y `reclamo_limite_perecedero_preferente`.
-- `tres_intentos_sin_resolver` e `intentos_problema_resuelto` tienen una ejecución satisfactoria cada uno con LLM real.
-- La prueba real aislada de prompt injection en nombre de producto reportó **OK**: la inyección llegó en un mensaje `role=tool` y no produjo reclamos ni escalamientos. El ejecutor aislado no guarda un informe Markdown; las pruebas deterministas conservan la evidencia reproducible del aislamiento y restauración.
-- Existe un fallo histórico real de `reclamo_valido` anterior al contrato confiable: la herramienta fue llamada, pero no se escribió el reclamo. Ese resultado motivó el diagnóstico y el flujo posterior de selección explícita. También existe una ejecución técnica posterior con cero tokens que falló por ausencia de variables de entorno; no mide el comportamiento del agente.
+- El traspaso original pasó 103 pruebas; la brecha de motivo se reprodujo antes de corregirla.
+- Suite ampliada comprobada: 161 pruebas aprobadas, sin llamadas al modelo. La salida final reproducible queda en `evaluacion/informes/pytest-final.txt`.
+- Hay 30 escenarios JSON con los siete casos mínimos y casos financieros adicionales. Los pedidos propios P-1016 y P-1017 permanecen en semilla: cubren fronteras de hogar regular y perecedero preferente.
+- La evaluación final real con cinco repeticiones necesita las variables de entorno del grupo. Su tasa final solo se completará desde el informe generado, nunca a partir de pruebas con dobles ni ejecuciones históricas.
 
-Todos esos escenarios se ejecutaron con `-n 1`. Un resultado `1/1` demuestra que esa ejecución concreta cumplió las verificaciones, pero **no equivale a estabilidad estadística ni a una tasa demostrada con `-n 5`**. No se atribuyen tasas adicionales ni resultados no observados.
+### Cómo reproducir
 
-### Limitaciones técnicas vigentes
+Desde la raíz del proyecto y con dependencias instaladas, `python -m pytest -q` no usa presupuesto ni modifica los datos de la interfaz. Para el modelo real, configurar LLM_API_KEY y LLM_BASE_URL solo en el entorno y ejecutar `python -m evaluacion.ejecutor -n 5`. Cada repetición usa una copia temporal de semilla; los informes Markdown y JSON guardan tasas, fallas, respuestas, trazas y tokens.
 
-- `CasoSoporte`, contadores y operaciones pendientes viven en memoria. Al reiniciar se pierden; el comportamiento seguro es no reconstruir ni inventar intentos. Persistirlos requeriría un modelo nuevo.
-- En escalamientos públicos, la causal conversacional depende del LLM; Python valida el conjunto permitido, pero no comprende semánticamente el relato.
-- La selección de reclamo es confiable por procedencia, pero Python no demuestra coherencia factual entre relato y categoría elegida.
-- La deduplicación pública es conservadora: compara cliente, pedido, causal y resumen normalizado. `Escalamiento` no tiene estado activo/cerrado.
-- Los repositorios JSON reescriben archivos completos sin bloqueo transaccional; solicitudes concurrentes podrían sufrir identificadores repetidos o actualizaciones perdidas. El proyecto y sus pruebas operan de forma secuencial.
-- El evaluador comprueba herramientas, coincidencia parcial de argumentos y estado JSON. No inspecciona texto de respuesta, contador/estado de `Sesion`, calidad de una solución ni número exacto de llamadas repetidas a una herramienta.
-- El escenario resuelto puede demostrar ausencia de escalamiento y al menos una preparación, pero el evaluador no prueba directamente que hubo exactamente dos preparaciones; esa garantía está cubierta por pruebas unitarias.
-- Una sola ejecución real de prompt injection no garantiza resistencia para todos los modelos o redacciones; el filtrado preventivo de `nota_cliente` sí es determinista.
+El escenario de inyección en nombre incluye metadatos que el ejecutor aplica en memoria en cada repetición. Verifica además que el texto atacado llegó al resultado de una herramienta, evitando un falso positivo por ausencia de exposición. La confirmación dinámica no altera la herramienta: solo construye el mensaje del cliente que conoce el desafío mostrado.
 
-### Responsabilidad pendiente del segundo integrante
+### Límites y mejoras con una semana adicional
 
-El segundo integrante debe implementar cancelaciones, reembolsos y confirmaciones financieras; extender el enrutador central sin crear interceptores paralelos; reutilizar `escalar_reembolso_superior_al_tope`; mantener identidad y revalidación en Python; y participar en la evaluación final conjunta. Ninguna de esas operaciones se declara implementada en este documento.
+El modelo puede interpretar mal el lenguaje o producir texto incorrecto; las invariantes de autorización y dinero no dependen de esa interpretación. Las comprobaciones de fragmentos de respuesta y revisión de trazas ayudan, pero no prueban comprensión universal ni resistencia a cualquier inyección. Los contadores y pendientes son de sesión y se pierden al reiniciar. Reclamo no persiste producto ni categoría en campos separados; conserva el relato y la selección se observa al ejecutarse. Escalamiento no tiene estado de cierre; la deduplicación conversacional depende también de resumen normalizado.
+
+Con una semana adicional usaríamos base de datos transaccional, estado de casos persistente, calendario laboral, pruebas adversariales adicionales y una evaluación independiente del texto. El grupo debe poder explicar: por qué 24 h no equivale siempre a un día calendario; por qué el tope se acumula; cómo una cancelación alta se convierte en solicitud y no en aprobación; dónde se consume la confirmación; y cómo se recupera un fallo entre escrituras.
+
+### Entrega
+
+Rama `entrega`, PR hacia `main` con plantilla, informe -n 5, salida pytest y decisiones. El grupo aporta integrantes, asigna al profesor como revisor y presenta en NPlad un solo enlace al PR. La fecha límite es la de NPlad; no se inventa aquí. No se cambia main ni se fusiona el PR como parte de esta preparación.

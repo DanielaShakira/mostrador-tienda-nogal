@@ -42,7 +42,22 @@ class ResultadoIntentoPendiente:
     turno_preparacion: int
 
 
-OperacionPendiente: TypeAlias = ReclamoPendiente | ResultadoIntentoPendiente
+@dataclass(frozen=True)
+class FinanzasPendientes:
+    """Autorización exacta; nunca forma parte de los argumentos del LLM."""
+
+    cliente_id: str
+    accion: Literal["cancelar", "reembolsar"]
+    numero_pedido: str
+    monto: int
+    motivo: str
+    turno_preparacion: int
+    codigo: str
+    huella: str
+    requiere_asesor: bool
+
+
+OperacionPendiente: TypeAlias = ReclamoPendiente | ResultadoIntentoPendiente | FinanzasPendientes
 
 
 def crear_cliente_llm() -> OpenAI:
@@ -69,6 +84,7 @@ class Sesion:
     tokens_entrada: int = 0
     tokens_salida: int = 0
     mensaje_actual: str | None = None
+    relato_reclamo: tuple[str, str | None, str, int] | None = None
     caso_soporte: CasoSoporte | None = None
     operacion_pendiente: OperacionPendiente | None = None
 

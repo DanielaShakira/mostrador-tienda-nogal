@@ -28,7 +28,7 @@ def preparar(
     sesion = Sesion(
         cliente_id=cliente_id,
         turnos=1,
-        mensaje_actual=motivo,
+        mensaje_actual=("motivo:" + motivo if motivo is not None else None),
     )
     argumentos = {"numero_pedido": numero_pedido}
     if producto is not None:

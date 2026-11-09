@@ -11,6 +11,9 @@ from pathlib import Path
 from agente import herramientas  # noqa: F401  (registra las herramientas)
 from agente.herramientas.registro import ejecutar, esquemas
 from agente.pendientes import procesar_operacion_pendiente
+from agente.herramientas.reclamos import capturar_motivo
+from agente.sesion import FinanzasPendientes
+from tienda import repositorio
 from agente.sesion import MODELO, Sesion, crear_cliente_llm
 
 MAX_ITERACIONES = 8
@@ -40,13 +43,17 @@ def responder(sesion: Sesion, historial: list[dict], mensaje: str) -> tuple[str,
     global _cliente_llm
     sesion.turnos += 1
     sesion.mensaje_actual = mensaje
+    capturar_motivo(sesion, mensaje)
     historial.append({"role": "user", "content": mensaje})
     traza = []
 
+    era_financiera = isinstance(sesion.operacion_pendiente, FinanzasPendientes)
     resultado_pendiente = procesar_operacion_pendiente(sesion, mensaje)
     if resultado_pendiente is not None:
         respuesta_pendiente = resultado_pendiente["mensaje"]
         historial.append({"role": "assistant", "content": respuesta_pendiente})
+        if era_financiera:
+            traza.append({"herramienta": "confirmacion_financiera", "argumentos": {"mensaje_cliente": mensaje}, "resultado": resultado_pendiente})
         return respuesta_pendiente, traza
 
     _cliente_llm = _cliente_llm or crear_cliente_llm()
@@ -79,5 +86,11 @@ def responder(sesion: Sesion, historial: list[dict], mensaje: str) -> tuple[str,
                 "tool_call_id": llamada.id,
                 "content": json.dumps(resultado, ensure_ascii=False, default=str),
             })
+
+        if isinstance(sesion.operacion_pendiente, FinanzasPendientes):
+            from agente.herramientas.finanzas import _respuesta_preparada
+            texto = _respuesta_preparada(sesion.operacion_pendiente)["mensaje"]
+            historial.append({"role": "assistant", "content": texto})
+            return texto, traza
 
     return "Lo siento, no pude completar tu solicitud. Intenta de nuevo con otras palabras.", traza

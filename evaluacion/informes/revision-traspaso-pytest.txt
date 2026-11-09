@@ -1,0 +1,6 @@
+Revision independiente del commit 2d90945
+Fecha local: 2026-11-08 America/Bogota
+Comando: python -m pytest -q
+Resultado: 103 passed in 3.52s
+Ejecutado en worktree aislado; no llama al modelo.
+No es el informe de escenarios -n 5.

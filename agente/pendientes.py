@@ -2,16 +2,22 @@
 
 from agente.herramientas.intentos import procesar_resultado_intento
 from agente.herramientas.reclamos import procesar_seleccion_reclamo
-from agente.sesion import ReclamoPendiente, ResultadoIntentoPendiente, Sesion
+from agente.sesion import ReclamoPendiente, ResultadoIntentoPendiente, FinanzasPendientes, Sesion
+from agente.herramientas.finanzas import procesar_confirmacion_financiera
+from tienda import repositorio
 
 
 def procesar_operacion_pendiente(sesion: Sesion, mensaje: str) -> dict | None:
     """Da cada respuesta al protocolo activo y libera solicitudes sustantivas."""
     pendiente = sesion.operacion_pendiente
+    if isinstance(pendiente, FinanzasPendientes):
+        return procesar_confirmacion_financiera(sesion, mensaje)
     if isinstance(pendiente, ReclamoPendiente):
-        resultado = procesar_seleccion_reclamo(sesion, mensaje)
+        with repositorio.transaccion():
+            resultado = procesar_seleccion_reclamo(sesion, mensaje)
     elif isinstance(pendiente, ResultadoIntentoPendiente):
-        resultado = procesar_resultado_intento(sesion, mensaje)
+        with repositorio.transaccion():
+            resultado = procesar_resultado_intento(sesion, mensaje)
     else:
         resultado = None
 
