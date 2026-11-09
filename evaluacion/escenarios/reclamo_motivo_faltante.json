@@ -1,0 +1,23 @@
+{
+  "nombre": "Reclamo sin motivo exige descripción sin registrar",
+  "descripcion": "Reclamo sin motivo exige descripción sin registrar. Usa confirmación desde un turno real posterior y datos temporales por repetición.",
+  "cliente": "C-01",
+  "turnos": [
+    "Quiero registrar un reclamo de P-1002.",
+    "1"
+  ],
+  "verificaciones": {
+    "herramientas_llamadas": [],
+    "herramientas_no_llamadas": [],
+    "argumentos": [],
+    "estado_final": [
+      {
+        "archivo": "reclamos",
+        "donde": {
+          "numero_pedido": "P-1002"
+        },
+        "cantidad": 0
+      }
+    ]
+  }
+}

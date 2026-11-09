@@ -1,0 +1,63 @@
+{
+  "nombre": "Escalamiento automático tras tres intentos sin resolver",
+  "descripcion": "C-01 solicita tres soluciones concretas para el mismo problema de conexión de P-1002 y confirma cada fallo en un turno posterior. Se verifica el escalamiento interno; el evaluador no puede inspeccionar directamente el contador de la sesión ni el texto de la respuesta.",
+  "cliente": "C-01",
+  "turnos": [
+    "Tengo dificultades para conectar los audífonos inalámbricos de mi pedido P-1002 con mi teléfono. No quiero presentar un reclamo ni solicitar un reembolso; quiero probar una primera solución concreta de soporte. Indícame una y prepara el seguimiento del intento.",
+    "sigue sin resolver",
+    "Sigo con el mismo problema de conexión de los audífonos de P-1002. Dame y prepara una segunda solución concreta, distinta de la anterior.",
+    "sigue sin resolver",
+    "El mismo problema de conexión de P-1002 continúa. Dame y prepara una tercera solución concreta, diferente de las dos anteriores.",
+    "sigue sin resolver"
+  ],
+  "verificaciones": {
+    "herramientas_llamadas": ["preparar_intento_resolucion"],
+    "herramientas_no_llamadas": [
+      "registrar_reclamo",
+      "escalar_a_asesor"
+    ],
+    "argumentos": [
+      {
+        "herramienta": "preparar_intento_resolucion",
+        "contiene": {"numero_pedido": "P-1002"}
+      }
+    ],
+    "estado_final": [
+      {"archivo": "pedidos", "donde": {}, "cantidad": 17},
+      {
+        "archivo": "pedidos",
+        "donde": {"numero": "P-1002"},
+        "cantidad": 1,
+        "esperado": {
+          "cliente_id": "C-01",
+          "fecha_compra": "2026-10-15",
+          "fecha_entrega": "2026-10-20",
+          "estado": "entregado",
+          "productos": [
+            {
+              "nombre": "Audífonos inalámbricos",
+              "categoria": "electronica",
+              "cantidad": 1,
+              "precio_unitario": 250000
+            }
+          ],
+          "total": 250000
+        }
+      },
+      {"archivo": "escalamientos", "donde": {}, "cantidad": 1},
+      {
+        "archivo": "escalamientos",
+        "donde": {
+          "cliente_id": "C-01",
+          "numero_pedido": "P-1002",
+          "motivo": "tres_intentos_sin_resolver"
+        },
+        "cantidad": 1,
+        "esperado": {"fecha": "2026-11-02"}
+      },
+      {"archivo": "reclamos", "donde": {}, "cantidad": 2},
+      {"archivo": "reclamos", "donde": {"numero_pedido": "P-1002"}, "cantidad": 0},
+      {"archivo": "reembolsos", "donde": {}, "cantidad": 0}
+    ]
+  }
+}

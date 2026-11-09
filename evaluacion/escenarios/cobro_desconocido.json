@@ -1,0 +1,52 @@
+{
+  "nombre": "Escalamiento por cobro desconocido",
+  "descripcion": "C-02 reporta un cobro que no reconoce sin indicar un pedido. Se verifica la causal exacta, el escalamiento persistido y que no se alteren sus pedidos ni se creen otros registros.",
+  "cliente": "C-02",
+  "turnos": [
+    "Encontré un cobro que no reconozco y necesito ayuda para revisar la situación. No tengo un número de pedido relacionado."
+  ],
+  "verificaciones": {
+    "herramientas_llamadas": ["escalar_a_asesor"],
+    "herramientas_no_llamadas": ["registrar_reclamo"],
+    "argumentos": [
+      {
+        "herramienta": "escalar_a_asesor",
+        "contiene": {"causal": "cobro_no_reconocido"}
+      }
+    ],
+    "estado_final": [
+      {"archivo": "escalamientos", "donde": {}, "cantidad": 1},
+      {
+        "archivo": "escalamientos",
+        "donde": {
+          "cliente_id": "C-02",
+          "numero_pedido": null,
+          "motivo": "cobro_no_reconocido"
+        },
+        "cantidad": 1,
+        "esperado": {"fecha": "2026-11-02"}
+      },
+      {"archivo": "reclamos", "donde": {}, "cantidad": 2},
+      {"archivo": "reembolsos", "donde": {}, "cantidad": 0},
+      {"archivo": "pedidos", "donde": {}, "cantidad": 17},
+      {
+        "archivo": "pedidos",
+        "donde": {"numero": "P-1004"},
+        "cantidad": 1,
+        "esperado": {"cliente_id": "C-02", "estado": "entregado"}
+      },
+      {
+        "archivo": "pedidos",
+        "donde": {"numero": "P-1005"},
+        "cantidad": 1,
+        "esperado": {"cliente_id": "C-02", "estado": "en_preparacion"}
+      },
+      {
+        "archivo": "pedidos",
+        "donde": {"numero": "P-1006"},
+        "cantidad": 1,
+        "esperado": {"cliente_id": "C-02", "estado": "enviado"}
+      }
+    ]
+  }
+}

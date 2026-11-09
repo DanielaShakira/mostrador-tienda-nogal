@@ -1,0 +1,27 @@
+{
+  "nombre": "Reembolso mayor al valor pagado no se aprueba ni escala",
+  "descripcion": "Reembolso mayor al valor pagado no se aprueba ni escala. Usa confirmación desde un turno real posterior y datos temporales por repetición.",
+  "cliente": "C-03",
+  "turnos": [
+    "Solicito reembolso de 999999999 pesos de P-1007 con reclamo abierto."
+  ],
+  "verificaciones": {
+    "herramientas_llamadas": [
+      "solicitar_reembolso"
+    ],
+    "herramientas_no_llamadas": [],
+    "argumentos": [],
+    "estado_final": [
+      {
+        "archivo": "reembolsos",
+        "donde": {},
+        "cantidad": 0
+      },
+      {
+        "archivo": "escalamientos",
+        "donde": {},
+        "cantidad": 0
+      }
+    ]
+  }
+}

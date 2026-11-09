@@ -12,11 +12,15 @@ no el texto de su respuesta. Formato de un escenario: ver escenarios/consulta_po
 """
 import argparse
 import json
-from datetime import datetime
+import copy
+import tempfile
+import sys
+import os
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from agente.ciclo import responder
-from agente.sesion import Sesion
+from agente.sesion import Sesion, FinanzasPendientes, crear_cliente_llm
 from tienda import repositorio
 
 ESCENARIOS = Path(__file__).parent / "escenarios"
@@ -63,17 +67,61 @@ def _describir(paso: dict) -> str:
     return paso["herramienta"]
 
 
+ULTIMA_EJECUCION = {}
+
+
 def ejecutar_una_vez(escenario: dict) -> tuple[list[str], list[dict], Sesion]:
-    repositorio.restablecer()
+    """Cada repetición usa semilla temporal: nunca borra datos del servidor."""
+    global ULTIMA_EJECUCION
+    datos_originales = repositorio.DATOS
+    leer_original = repositorio.leer_pedidos
+    respuestas, traza = [], []
     sesion = Sesion(cliente_id=escenario["cliente"])
-    historial, traza = [], []
-    try:
-        for turno in escenario["turnos"]:
-            _, pasos = responder(sesion, historial, turno)
-            traza.extend(pasos)
-    except Exception as e:
-        return [f"error durante la ejecución: {e}"], traza, sesion
-    return verificar(escenario, traza), traza, sesion
+    historial = []
+    fallas = []
+    with tempfile.TemporaryDirectory(prefix="nogal-escenario-") as carpeta:
+        try:
+            repositorio.DATOS = Path(carpeta)
+            repositorio.restablecer()
+            estado_inicial = {nombre: json.loads((repositorio.DATOS / f"{nombre}.json").read_text(encoding="utf-8"))
+                              for nombre in escenario.get("verificaciones", {}).get("sin_cambios", [])}
+            inyeccion = escenario.get("inyeccion_producto")
+            if inyeccion:
+                def leer_inyectado():
+                    pedidos = copy.deepcopy(leer_original())
+                    pedido = next(p for p in pedidos if p.numero == inyeccion["numero_pedido"])
+                    pedido.productos[0].nombre = inyeccion["texto"]
+                    return pedidos
+                repositorio.leer_pedidos = leer_inyectado
+            for turno in escenario["turnos"]:
+                if turno == "{{confirmacion_financiera}}":
+                    pendiente = sesion.operacion_pendiente
+                    if not isinstance(pendiente, FinanzasPendientes):
+                        raise ValueError("El agente no preparó la operación que el cliente debía confirmar.")
+                    # Simula el mensaje REAL del cliente, no un argumento de tool.
+                    turno = f"confirmar {pendiente.codigo}"
+                respuesta, pasos = responder(sesion, historial, turno)
+                respuestas.append(respuesta)
+                traza.extend(pasos)
+            fallas = verificar(escenario, traza)
+            for nombre, inicial in estado_inicial.items():
+                final = json.loads((repositorio.DATOS / f"{nombre}.json").read_text(encoding="utf-8"))
+                if final != inicial:
+                    fallas.append(f"{nombre}.json cambió cuando debía permanecer intacto")
+            texto = " ".join(respuestas).casefold()
+            for fragmento in escenario.get("verificaciones", {}).get("respuesta_contiene", []):
+                if fragmento.casefold() not in texto:
+                    fallas.append(f"la respuesta no contiene {fragmento!r}")
+            if inyeccion and not any(inyeccion["texto"] in json.dumps(p["resultado"], ensure_ascii=False) for p in traza):
+                fallas.append("la inyección no llegó en un resultado de herramienta")
+        except Exception as e:
+            fallas = [f"error durante la ejecución: {type(e).__name__}: {e}"]
+        finally:
+            ULTIMA_EJECUCION = {"nombre": escenario["nombre"], "fallas": fallas, "respuestas": respuestas,
+                               "traza": traza, "tokens_entrada": sesion.tokens_entrada, "tokens_salida": sesion.tokens_salida}
+            repositorio.leer_pedidos = leer_original
+            repositorio.DATOS = datos_originales
+    return fallas, traza, sesion
 
 
 def main():
@@ -81,9 +129,17 @@ def main():
     parser.add_argument("-n", type=int, default=5, help="veces que se ejecuta cada escenario")
     parser.add_argument("escenarios", nargs="*", help="archivos de escenario (por defecto, todos)")
     opciones = parser.parse_args()
+    if opciones.n < 1:
+        parser.error("-n debe ser positivo")
+    # Fallar una sola vez si falta configuración; no fabricar un informe del modelo.
+    crear_cliente_llm()
+    registros = []
+    progreso_dir = Path(__file__).parent.parent / ".local"
+    progreso_dir.mkdir(exist_ok=True)
+    ahora = datetime.now(timezone(timedelta(hours=-5)))
 
     rutas = [Path(r) for r in opciones.escenarios] or sorted(ESCENARIOS.glob("*.json"))
-    lineas = [f"# Informe de escenarios ({datetime.now():%Y-%m-%d %H:%M})", "",
+    lineas = [f"# Informe de escenarios ({ahora:%Y-%m-%d %H:%M} America/Bogota)", "",
               f"Cada escenario se ejecutó {opciones.n} veces.", "",
               "| Escenario | Aciertos | Tasa |", "|---|---|---|"]
     detalle, total_aciertos, total_tokens = [], 0, [0, 0]
@@ -93,9 +149,13 @@ def main():
         aciertos = 0
         for i in range(1, opciones.n + 1):
             fallas, traza, sesion = ejecutar_una_vez(escenario)
+            registros.append(copy.deepcopy(ULTIMA_EJECUCION))
+            # Evidencia incremental: una interrupción no pierde las corridas ya terminadas.
+            (progreso_dir / "evaluacion-parcial.json").write_text(json.dumps(registros, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
+            (progreso_dir / "evaluacion-estado.json").write_text(json.dumps({"inicio": ahora.isoformat(), "actualizado": datetime.now(timezone(timedelta(hours=-5))).isoformat(), "escenario": escenario["nombre"], "repeticion": i, "repeticiones": opciones.n, "terminadas": len(registros), "total": len(rutas)*opciones.n, "fallas": fallas}, ensure_ascii=False, indent=2), encoding="utf-8")
             total_tokens[0] += sesion.tokens_entrada
             total_tokens[1] += sesion.tokens_salida
-            print(f"{escenario['nombre']} [{i}/{opciones.n}]: {'OK' if not fallas else 'FALLA'}")
+            print(f"{escenario['nombre']} [{i}/{opciones.n}]: {'OK' if not fallas else 'FALLA'}", flush=True)
             if fallas:
                 herramientas = ", ".join(_describir(p) for p in traza) or "ninguna"
                 detalle.append(f"- **{escenario['nombre']}**, ejecución {i}: {'; '.join(fallas)}. Herramientas usadas: {herramientas}.")
@@ -108,13 +168,14 @@ def main():
     lineas += ["", f"**Total: {total_aciertos}/{total} ({total_aciertos / max(total, 1):.0%})**", "",
                f"Tokens usados: {total_tokens[0]} de entrada y {total_tokens[1]} de salida.", "",
                "## Fallas", ""] + (detalle or ["Ninguna."])
-    repositorio.restablecer()
-
     INFORMES.mkdir(exist_ok=True)
-    informe = INFORMES / f"informe-{datetime.now():%Y%m%d-%H%M%S}.md"
+    informe = INFORMES / f"informe-{ahora:%Y%m%d-%H%M%S}.md"
     informe.write_text("\n".join(lineas) + "\n", encoding="utf-8")
     print("\n".join(lineas[4:]))
+    informe.with_suffix(".json").write_text(json.dumps(registros, ensure_ascii=False, indent=2, default=str) + "\n", encoding="utf-8")
     print(f"\nInforme guardado en {informe}")
+    if total_aciertos != total:
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

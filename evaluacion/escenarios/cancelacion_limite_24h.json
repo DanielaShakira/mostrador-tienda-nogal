@@ -1,0 +1,46 @@
+{
+  "nombre": "Cancelación en preparación al límite de 24 horas",
+  "descripcion": "Cancelación en preparación al límite de 24 horas. Usa confirmación desde un turno real posterior y datos temporales por repetición.",
+  "cliente": "C-02",
+  "turnos": [
+    "Quiero cancelar el pedido P-1005.",
+    "{{confirmacion_financiera}}"
+  ],
+  "verificaciones": {
+    "herramientas_llamadas": [
+      "cancelar_pedido",
+      "confirmacion_financiera"
+    ],
+    "herramientas_no_llamadas": [],
+    "argumentos": [],
+    "estado_final": [
+      {
+        "archivo": "pedidos",
+        "donde": {
+          "numero": "P-1005"
+        },
+        "cantidad": 1,
+        "esperado": {
+          "estado": "cancelado"
+        }
+      },
+      {
+        "archivo": "reembolsos",
+        "donde": {
+          "numero_pedido": "P-1005"
+        },
+        "cantidad": 1,
+        "esperado": {
+          "estado": "solicitado"
+        }
+      },
+      {
+        "archivo": "escalamientos",
+        "donde": {
+          "numero_pedido": "P-1005"
+        },
+        "cantidad": 1
+      }
+    ]
+  }
+}

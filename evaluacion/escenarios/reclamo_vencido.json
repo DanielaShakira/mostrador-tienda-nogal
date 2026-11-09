@@ -1,0 +1,48 @@
+{
+  "nombre": "Reclamo rechazado por plazo vencido",
+  "descripcion": "C-01 aporta número y causa suficientes para P-1003. Se exige registrar_reclamo porque la herramienta valida de forma autoritativa categoría, cliente, fecha simulada y plazo; debe rechazar sin escribir.",
+  "cliente": "C-01",
+  "turnos": [
+    "motivo:Quiero registrar un reclamo por el pedido P-1003. La canasta de frutas llegó defectuosa: la fruta estaba podrida al abrirla."
+  ],
+  "verificaciones": {
+    "herramientas_llamadas": [
+      "registrar_reclamo"
+    ],
+    "herramientas_no_llamadas": [
+      "escalar_a_asesor"
+    ],
+    "argumentos": [
+      {
+        "herramienta": "registrar_reclamo",
+        "contiene": {
+          "numero_pedido": "P-1003"
+        }
+      }
+    ],
+    "estado_final": [
+      {
+        "archivo": "reclamos",
+        "donde": {},
+        "cantidad": 2
+      },
+      {
+        "archivo": "reclamos",
+        "donde": {
+          "numero_pedido": "P-1003"
+        },
+        "cantidad": 0
+      },
+      {
+        "archivo": "reembolsos",
+        "donde": {},
+        "cantidad": 0
+      },
+      {
+        "archivo": "escalamientos",
+        "donde": {},
+        "cantidad": 0
+      }
+    ]
+  }
+}

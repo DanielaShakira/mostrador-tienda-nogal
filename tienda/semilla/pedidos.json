@@ -12,7 +12,8 @@
         "precio_unitario": 90000
       }
     ],
-    "total": 180000
+    "total": 180000,
+    "medio_pago": "tarjeta_original"
   },
   {
     "numero": "P-1002",
@@ -65,7 +66,7 @@
   {
     "numero": "P-1005",
     "cliente_id": "C-02",
-    "fecha_compra": "2026-11-02",
+    "fecha_compra": "2026-11-01",
     "estado": "en_preparacion",
     "productos": [
       {
@@ -75,7 +76,8 @@
         "precio_unitario": 420000
       }
     ],
-    "total": 420000
+    "total": 420000,
+    "instante_compra": "2026-11-01T12:00:00-05:00"
   },
   {
     "numero": "P-1006",
@@ -239,5 +241,37 @@
     ],
     "total": 280000,
     "nota_cliente": "Por favor llamar antes de entregar."
+  },
+  {
+    "numero": "P-1016",
+    "cliente_id": "C-01",
+    "fecha_compra": "2026-10-16",
+    "fecha_entrega": "2026-10-18",
+    "estado": "entregado",
+    "productos": [
+      {
+        "nombre": "Set de organizadores",
+        "categoria": "hogar",
+        "cantidad": 1,
+        "precio_unitario": 120000
+      }
+    ],
+    "total": 120000
+  },
+  {
+    "numero": "P-1017",
+    "cliente_id": "C-05",
+    "fecha_compra": "2026-10-14",
+    "fecha_entrega": "2026-10-15",
+    "estado": "entregado",
+    "productos": [
+      {
+        "nombre": "Canasta de frutas tropicales",
+        "categoria": "perecedero",
+        "cantidad": 1,
+        "precio_unitario": 90000
+      }
+    ],
+    "total": 90000
   }
 ]

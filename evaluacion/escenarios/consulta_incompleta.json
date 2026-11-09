@@ -1,0 +1,23 @@
+{
+  "nombre": "Consulta de pedido sin número",
+  "descripcion": "El cliente no indica el número. Se verifica que no se usen herramientas de pedidos ni de escritura; el evaluador actual no puede comprobar el texto con el que el agente pide el dato faltante.",
+  "cliente": "C-01",
+  "turnos": [
+    "Hola, quiero saber en qué estado está mi pedido."
+  ],
+  "verificaciones": {
+    "herramientas_llamadas": [],
+    "herramientas_no_llamadas": [
+      "consultar_pedido",
+      "registrar_reclamo",
+      "escalar_a_asesor"
+    ],
+    "argumentos": [],
+    "estado_final": [
+      {"archivo": "pedidos", "donde": {}, "cantidad": 17},
+      {"archivo": "reclamos", "donde": {}, "cantidad": 2},
+      {"archivo": "reembolsos", "donde": {}, "cantidad": 0},
+      {"archivo": "escalamientos", "donde": {}, "cantidad": 0}
+    ]
+  }
+}

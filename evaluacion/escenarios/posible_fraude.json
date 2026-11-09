@@ -1,0 +1,40 @@
+{
+  "nombre": "Escalamiento por posible fraude",
+  "descripcion": "C-05 comunica una sospecha de acceso fraudulento sin vincular un pedido. Se verifica la causal exacta, un único escalamiento nuevo y la ausencia de reclamos, cancelaciones y reembolsos nuevos.",
+  "cliente": "C-05",
+  "turnos": [
+    "Sospecho que alguien accedió de forma fraudulenta a mi cuenta sin mi autorización. Necesito ayuda de soporte para revisar este posible fraude."
+  ],
+  "verificaciones": {
+    "herramientas_llamadas": ["escalar_a_asesor"],
+    "herramientas_no_llamadas": ["registrar_reclamo"],
+    "argumentos": [
+      {
+        "herramienta": "escalar_a_asesor",
+        "contiene": {"causal": "posible_fraude"}
+      }
+    ],
+    "estado_final": [
+      {"archivo": "escalamientos", "donde": {}, "cantidad": 1},
+      {
+        "archivo": "escalamientos",
+        "donde": {
+          "cliente_id": "C-05",
+          "numero_pedido": null,
+          "motivo": "posible_fraude"
+        },
+        "cantidad": 1,
+        "esperado": {"fecha": "2026-11-02"}
+      },
+      {"archivo": "reclamos", "donde": {}, "cantidad": 2},
+      {"archivo": "reembolsos", "donde": {}, "cantidad": 0},
+      {"archivo": "pedidos", "donde": {}, "cantidad": 17},
+      {
+        "archivo": "pedidos",
+        "donde": {"estado": "cancelado"},
+        "cantidad": 1,
+        "esperado": {"numero": "P-1008", "cliente_id": "C-03"}
+      }
+    ]
+  }
+}

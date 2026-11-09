@@ -1,0 +1,33 @@
+{
+  "nombre": "Escalamiento por solicitud de asesor",
+  "descripcion": "C-01 solicita explícitamente hablar con una persona sin asociar un pedido. Se verifica la causal tanto en la llamada como en el registro persistido; el evaluador no comprueba el texto de la respuesta.",
+  "cliente": "C-01",
+  "turnos": [
+    "Necesito hablar con una persona o un asesor humano para que me ayude con mi caso."
+  ],
+  "verificaciones": {
+    "herramientas_llamadas": ["escalar_a_asesor"],
+    "herramientas_no_llamadas": ["registrar_reclamo"],
+    "argumentos": [
+      {
+        "herramienta": "escalar_a_asesor",
+        "contiene": {"causal": "solicitud_asesor"}
+      }
+    ],
+    "estado_final": [
+      {"archivo": "escalamientos", "donde": {}, "cantidad": 1},
+      {
+        "archivo": "escalamientos",
+        "donde": {
+          "cliente_id": "C-01",
+          "numero_pedido": null,
+          "motivo": "solicitud_asesor"
+        },
+        "cantidad": 1,
+        "esperado": {"fecha": "2026-11-02"}
+      },
+      {"archivo": "reclamos", "donde": {}, "cantidad": 2},
+      {"archivo": "reembolsos", "donde": {}, "cantidad": 0}
+    ]
+  }
+}

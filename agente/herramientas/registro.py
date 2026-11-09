@@ -25,6 +25,7 @@ from typing import Callable
 from pydantic import BaseModel, ValidationError
 
 from agente.sesion import Sesion
+from tienda import repositorio
 
 # nombre -> (función, modelo de argumentos)
 HERRAMIENTAS: dict[str, tuple[Callable, type[BaseModel]]] = {}
@@ -66,7 +67,8 @@ def ejecutar(nombre: str, argumentos_json: str, sesion: Sesion) -> dict:
     except ValidationError as e:
         return {"error": "Argumentos inválidos.", "detalle": json.loads(e.json(include_url=False))}
     try:
-        return funcion(sesion, args)
+        with repositorio.transaccion():
+            return funcion(sesion, args)
     except ErrorDeHerramienta as e:
         return {"error": str(e)}
     except Exception as e:

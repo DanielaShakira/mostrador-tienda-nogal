@@ -1,0 +1,35 @@
+{
+  "nombre": "Reembolso de 300000 autorizado sin exceder tope",
+  "descripcion": "Reembolso de 300000 autorizado sin exceder tope. Usa confirmación desde un turno real posterior y datos temporales por repetición.",
+  "cliente": "C-03",
+  "turnos": [
+    "Solicito un reembolso de 300000 pesos por P-1007 con reclamo abierto.",
+    "{{confirmacion_financiera}}"
+  ],
+  "verificaciones": {
+    "herramientas_llamadas": [
+      "solicitar_reembolso",
+      "confirmacion_financiera"
+    ],
+    "herramientas_no_llamadas": [],
+    "argumentos": [],
+    "estado_final": [
+      {
+        "archivo": "reembolsos",
+        "donde": {
+          "numero_pedido": "P-1007"
+        },
+        "cantidad": 1,
+        "esperado": {
+          "monto": 300000,
+          "estado": "aprobado"
+        }
+      },
+      {
+        "archivo": "escalamientos",
+        "donde": {},
+        "cantidad": 0
+      }
+    ]
+  }
+}
