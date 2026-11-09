@@ -57,3 +57,8 @@ La aplicación simula registros de devolución y no mueve dinero bancario. Pendi
 
 
 Grupo 5 solicitó que el trabajo final se publique en `Prueba`, con PR hacia main. `python validar_entrega.py --corregidos` prueba primero los cinco escenarios corregidos una sola vez y, si pasan, ejecuta todos con cinco repeticiones. Conserva ambos informes y los anteriores; no sustituye ni elimina resultados fallidos.
+
+
+## Evidencia final del Grupo 5
+
+La suite local final aprobó 175 pruebas. El informe completo corregido `informe-20261109-002259.md` contiene 150/150 aciertos con cinco repeticiones por escenario y su JSON conserva trazas. El informe inicial de 139/150 se mantiene como antecedente. No se debe confundir el resultado observado en esos escenarios con una garantía universal del modelo.

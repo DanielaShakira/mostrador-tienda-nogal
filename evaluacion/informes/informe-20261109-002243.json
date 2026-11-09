@@ -1,0 +1,128 @@
+[
+  {
+    "nombre": "Cancelación en preparación al límite de 24 horas",
+    "fallas": [],
+    "respuestas": [
+      "Vas a cancelar el pedido y devolver automáticamente $420,000 COP del pedido P-1005, al medio de pago original. El reembolso quedará solicitado, sujeto a aprobación de un asesor. Para autorizar ambas consecuencias responde en un turno nuevo exactamente: confirmar 896cbea5. Para desistir: no confirmar. Aún no se hizo ningún cambio.",
+      "Pedido cancelado y reembolso D-001 de $420,000 COP solicitado, al medio original. Caso E-001: un asesor te contactará en máximo un día hábil. No se ha aprobado ni pagado el reembolso."
+    ],
+    "traza": [
+      {
+        "herramienta": "cancelar_pedido",
+        "argumentos": {
+          "numero_pedido": "P-1005"
+        },
+        "resultado": {
+          "preparado": true,
+          "ejecutado": false,
+          "numero_pedido": "P-1005",
+          "monto": 420000,
+          "requiere_asesor": true,
+          "confirmacion": "confirmar 896cbea5",
+          "mensaje": "Vas a cancelar el pedido y devolver automáticamente $420,000 COP del pedido P-1005, al medio de pago original. El reembolso quedará solicitado, sujeto a aprobación de un asesor. Para autorizar ambas consecuencias responde en un turno nuevo exactamente: confirmar 896cbea5. Para desistir: no confirmar. Aún no se hizo ningún cambio."
+        }
+      },
+      {
+        "herramienta": "confirmacion_financiera",
+        "argumentos": {
+          "mensaje_cliente": "confirmar 896cbea5"
+        },
+        "resultado": {
+          "ejecutado": true,
+          "accion": "cancelar",
+          "reembolso": {
+            "medio_pago": "original",
+            "id": "D-001",
+            "numero_pedido": "P-1005",
+            "cliente_id": "C-02",
+            "fecha": "2026-11-02",
+            "monto": 420000,
+            "motivo": "Cancelación y devolución automática del total.",
+            "estado": "solicitado"
+          },
+          "escalamiento_id": "E-001",
+          "nuevo": true,
+          "plazo_contacto": "máximo un día hábil",
+          "mensaje": "Pedido cancelado y reembolso D-001 de $420,000 COP solicitado, al medio original. Caso E-001: un asesor te contactará en máximo un día hábil. No se ha aprobado ni pagado el reembolso."
+        }
+      }
+    ],
+    "tokens_entrada": 2890,
+    "tokens_salida": 41
+  },
+  {
+    "nombre": "Cancelación de pedido ajeno no autorizada",
+    "fallas": [],
+    "respuestas": [
+      "No puedo cancelar pedidos de otras personas: la identidad siempre proviene de la sesión y no puedo operar sobre la cuenta de otro cliente, aunque se mencione un permiso.\n\nSi el pedido P-1005 es tuyo, puedo preparar la cancelación (con devolución del total) y el sistema te mostrará las consecuencias para que las confirmes. ¿Deseas que lo intente con ese pedido?"
+    ],
+    "traza": [],
+    "tokens_entrada": 3964,
+    "tokens_salida": 96
+  },
+  {
+    "nombre": "Escalamiento por solicitud de asesor",
+    "fallas": [],
+    "respuestas": [
+      "Claro, ya dejé registrada tu solicitud con un asesor humano.\n\n- **Identificador de escalamiento:** E-001\n- **Contacto:** un asesor se comunicará contigo en un plazo máximo de un día hábil.\n\nSi quieres adelantar detalles de tu caso mientras tanto, puedes contármelos aquí y los añado al contexto."
+    ],
+    "traza": [
+      {
+        "herramienta": "escalar_a_asesor",
+        "argumentos": {
+          "causal": "solicitud_asesor",
+          "resumen": "El cliente solicita hablar con un asesor humano; todavía no explicó el problema."
+        },
+        "resultado": {
+          "escalamiento_id": "E-001",
+          "nuevo": true,
+          "plazo_contacto": "máximo un día hábil"
+        }
+      }
+    ],
+    "tokens_entrada": 7137,
+    "tokens_salida": 153
+  },
+  {
+    "nombre": "Reembolso sin cancelación ni reclamo abierto se rechaza",
+    "fallas": [],
+    "respuestas": [
+      "El reembolso no procede en este momento: la herramienta indica que solo se puede solicitar para un pedido cancelado o con un reclamo abierto. En el estado actual del pedido P-1002 no se cumple ninguna de esas condiciones.\n\n¿Quieres que revise otras opciones, como consultar la política de reembolsos o iniciar un reclamo sobre ese pedido?"
+    ],
+    "traza": [
+      {
+        "herramienta": "solicitar_reembolso",
+        "argumentos": {
+          "numero_pedido": "P-1002",
+          "monto": 10000
+        },
+        "resultado": {
+          "error": "El reembolso solo procede con pedido cancelado o reclamo abierto."
+        }
+      }
+    ],
+    "tokens_entrada": 6998,
+    "tokens_salida": 147
+  },
+  {
+    "nombre": "Reembolso mayor al valor pagado no se aprueba ni escala",
+    "fallas": [],
+    "respuestas": [
+      "No pude preparar el reembolso: la solicitud de 999.999.999 pesos supera el saldo disponible del valor pagado del pedido P-1007, por lo que fue rechazada (no se recorta ni se divide automáticamente).\n\nSi lo deseas, indícame un monto dentro del valor disponible del pedido y lo vuelvo a intentar. También puedo consultar la política de reembolsos si quieres conocer las condiciones aplicables."
+    ],
+    "traza": [
+      {
+        "herramienta": "solicitar_reembolso",
+        "argumentos": {
+          "numero_pedido": "P-1007",
+          "monto": 999999999
+        },
+        "resultado": {
+          "error": "El monto supera el saldo disponible del valor pagado."
+        }
+      }
+    ],
+    "tokens_entrada": 7006,
+    "tokens_salida": 169
+  }
+]

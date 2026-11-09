@@ -11,8 +11,8 @@ def procesar_operacion_pendiente(sesion: Sesion, mensaje: str) -> dict | None:
     """Da cada respuesta al protocolo activo y libera solicitudes sustantivas."""
     pendiente = sesion.operacion_pendiente
     if isinstance(pendiente, FinanzasPendientes):
-        return procesar_confirmacion_financiera(sesion, mensaje)
-    if isinstance(pendiente, ReclamoPendiente):
+        resultado = procesar_confirmacion_financiera(sesion, mensaje)
+    elif isinstance(pendiente, ReclamoPendiente):
         with repositorio.transaccion():
             resultado = procesar_seleccion_reclamo(sesion, mensaje)
     elif isinstance(pendiente, ResultadoIntentoPendiente):

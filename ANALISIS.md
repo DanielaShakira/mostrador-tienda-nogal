@@ -171,9 +171,9 @@ La persistencia se amplió porque cancelar implica varias escrituras: bloqueo en
 ### Evidencia comprobada
 
 - El traspaso original pasó 103 pruebas; la brecha de motivo se reprodujo antes de corregirla.
-- Suite ampliada comprobada: 174 pruebas aprobadas, sin llamadas al modelo. La salida final reproducible queda en `evaluacion/informes/pytest-final.txt`.
+- Suite ampliada comprobada: 175 pruebas aprobadas, sin llamadas al modelo. La salida final reproducible queda en `evaluacion/informes/pytest-final.txt`.
 - Hay 30 escenarios JSON con los siete casos mínimos y casos financieros adicionales. Los pedidos propios P-1016 y P-1017 permanecen en semilla: cubren fronteras de hogar regular y perecedero preferente.
-- La evaluación final real con cinco repeticiones necesita las variables de entorno del grupo. Su tasa final solo se completará desde el informe generado, nunca a partir de pruebas con dobles ni ejecuciones históricas.
+- La evaluación real completa de la versión corregida obtuvo **150/150 aciertos (100%)**, cinco repeticiones de cada uno de los 30 escenarios. Evidencia: `evaluacion/informes/informe-20261109-002259.md` y su JSON. Usó 1.145.195 tokens de entrada y 30.471 de salida. Se conserva el primer informe 139/150 y la prevalidación 5/5 para mostrar la evolución, no para mezclarlos con la tasa final.
 
 ### Cómo reproducir
 
@@ -199,3 +199,10 @@ El informe `informe-20261109-000826.md` registró 139/150 (93% redondeado), con 
 Los otros seis fallos revelaron demoras indebidas o inferencias sobre campos que la consulta no devolvía. Se añadieron instrucciones para preparar solicitudes completas directamente, sin una pregunta previa, y para escalar asesor sin pedir más detalles como requisito. El ciclo usa `tool_choice` en la primera llamada para patrones conservadores de solicitudes directas reales: asesor; cancelación con número; reembolso con número y monto. Esta ruta decide qué herramienta debe VALIDAR, nunca autoriza una escritura ni interpreta una confirmación. Solo evalúa el mensaje del usuario, nunca texto recuperado; preguntas, citas y negaciones fuera de esos patrones conservadores permanecen con el flujo normal. Las invariantes siguen dentro de las herramientas y el enrutador único de pendientes no se duplicó.
 
 El Grupo 5 pidió subir el trabajo en `Prueba`, aunque la actividad menciona `entrega`; se conserva la rama previa y el PR definitivo usa la rama solicitada. Los nombres de integrantes y el usuario del profesor siguen pendientes de dato humano.
+
+
+### Cierre de validación y procedencia
+
+La corrida completa inició con el código de `2bc526d` y finalizó sin fallas: 150/150. Después se añadió una corrección del cruce `nuevo caso` durante una preparación financiera, cubierta por una prueba determinista adicional, y mejoras operativas de timeout y guardado incremental para futuras evaluaciones. Estos cambios no se presentan como una nueva corrida pagada: la suite local completa posterior aprobó 175 pruebas. El informe del modelo conserva las respuestas y trazas reales de la versión que corrió. Las comprobaciones de GitHub en Linux se consultan en el PR.
+
+La aplicación quedó comprobada por HTTP (página, JavaScript y cinco clientes, todo 200). Windows impidió al agente detener la instancia anterior iniciada desde la terminal del usuario; si sigue abierta, hace falta reiniciarla desde esa misma terminal para cargar todos los módulos nuevos. Los datos de la interfaz permanecen intactos.

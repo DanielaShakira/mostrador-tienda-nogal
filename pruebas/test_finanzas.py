@@ -267,3 +267,16 @@ def test_ninguna_herramienta_llm_confirma():
     nombres={s["function"]["name"] for s in esquemas()}
     assert "cancelar_pedido" in nombres and "solicitar_reembolso" in nombres
     assert "confirmacion_financiera" not in nombres
+
+
+
+def test_nuevo_caso_descarta_finanzas_y_abandona_seguimiento_anterior():
+    from agente.sesion import CasoSoporte
+    cambiar()
+    _,s=preparar()
+    s.caso_soporte=CasoSoporte(caso_id="CASO-anterior",cliente_id=s.cliente_id,numero_pedido="P-1001",relato_inicial="Otro problema",intentos_fallidos=2)
+    s.turnos+=1
+    r=procesar_operacion_pendiente(s,"nuevo caso")
+    assert r["nuevo_caso_autorizado"]
+    assert s.operacion_pendiente is None and s.caso_soporte is None
+    assert not repo.leer_reembolsos()

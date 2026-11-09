@@ -29,3 +29,6 @@ ANALISIS.md conserva las decisiones del compañero y añade tablas financieras, 
 ## Resolución posterior de la revisión
 
 Los hallazgos anteriores documentan el estado del commit revisado, no fallos que se oculten en la implementación final. La rama entrega implementa ahora herramientas financieras, confirmación exacta posterior, tope acumulado, reserva de saldo, escritura consistente y recuperación. El motivo exige declaración explícita, conserva relato entre turnos y no se registra con petición genérica más opción numérica. La precisión de 24 h usa instante opcional y reloj simulado; datos de ayer sin hora no autorizan. La inyección de producto forma parte del ejecutor estándar en cada repetición y comprueba exposición. Se ampliaron pruebas y escenarios; los resultados reales finales se documentan separadamente en los informes, sin convertir el antecedente 103/103 en una tasa del modelo.
+
+
+Cierre: suite local final de 175 pruebas aprobadas. Evaluación completa corregida: 150/150 (30 escenarios, cinco repeticiones), en `evaluacion/informes/informe-20261109-002259.md` y JSON adjunto. El primer informe 139/150 permanece versionado. Publicación final en `Prueba` por solicitud del Grupo 5.

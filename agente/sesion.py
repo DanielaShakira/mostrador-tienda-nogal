@@ -68,7 +68,7 @@ def crear_cliente_llm() -> OpenAI:
     faltan = [v for v in ("LLM_API_KEY", "LLM_BASE_URL") if not os.environ.get(v)]
     if faltan:
         raise RuntimeError(f"Faltan los secretos {', '.join(faltan)}. Revisa la sección 2 de GUIA.md.")
-    return OpenAI(api_key=os.environ["LLM_API_KEY"], base_url=os.environ["LLM_BASE_URL"])
+    return OpenAI(api_key=os.environ["LLM_API_KEY"], base_url=os.environ["LLM_BASE_URL"], timeout=60.0, max_retries=1)
 
 
 @dataclass

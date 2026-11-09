@@ -134,6 +134,8 @@ def main():
     # Fallar una sola vez si falta configuración; no fabricar un informe del modelo.
     crear_cliente_llm()
     registros = []
+    progreso_dir = Path(__file__).parent.parent / ".local"
+    progreso_dir.mkdir(exist_ok=True)
     ahora = datetime.now(timezone(timedelta(hours=-5)))
 
     rutas = [Path(r) for r in opciones.escenarios] or sorted(ESCENARIOS.glob("*.json"))
@@ -148,9 +150,12 @@ def main():
         for i in range(1, opciones.n + 1):
             fallas, traza, sesion = ejecutar_una_vez(escenario)
             registros.append(copy.deepcopy(ULTIMA_EJECUCION))
+            # Evidencia incremental: una interrupción no pierde las corridas ya terminadas.
+            (progreso_dir / "evaluacion-parcial.json").write_text(json.dumps(registros, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
+            (progreso_dir / "evaluacion-estado.json").write_text(json.dumps({"inicio": ahora.isoformat(), "actualizado": datetime.now(timezone(timedelta(hours=-5))).isoformat(), "escenario": escenario["nombre"], "repeticion": i, "repeticiones": opciones.n, "terminadas": len(registros), "total": len(rutas)*opciones.n, "fallas": fallas}, ensure_ascii=False, indent=2), encoding="utf-8")
             total_tokens[0] += sesion.tokens_entrada
             total_tokens[1] += sesion.tokens_salida
-            print(f"{escenario['nombre']} [{i}/{opciones.n}]: {'OK' if not fallas else 'FALLA'}")
+            print(f"{escenario['nombre']} [{i}/{opciones.n}]: {'OK' if not fallas else 'FALLA'}", flush=True)
             if fallas:
                 herramientas = ", ".join(_describir(p) for p in traza) or "ninguna"
                 detalle.append(f"- **{escenario['nombre']}**, ejecución {i}: {'; '.join(fallas)}. Herramientas usadas: {herramientas}.")
